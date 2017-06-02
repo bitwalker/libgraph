@@ -1,0 +1,4 @@
+%{"benchee": {:hex, :benchee, "0.8.0", "fe93506d05252ad82d72257f6549aab11664088a1307f26f0ab1acb172b8c35b", [:mix], [{:deep_merge, "~> 0.1", [hex: :deep_merge, repo: "hexpm", optional: false]}], "hexpm"},
+  "deep_merge": {:hex, :deep_merge, "0.1.1", "c27866a7524a337b6a039eeb8dd4f17d458fd40fbbcb8c54661b71a22fffe846", [:mix], [], "hexpm"},
+  "propcheck": {:hex, :propcheck, "0.0.1", "e4f88852ee28a4d9b473cbc527504613289d377eb8fad67700008b5e51fb7711", [:mix], [{:proper, "~> 1.1.1-beta", [hex: :proper, repo: "hexpm", optional: false]}], "hexpm"},
+  "proper": {:hex, :proper, "1.1.1-beta", "5eef3fa0cae017ecb4bf6fd6a144349a048e999223a4f1e98ce372ff1772edd3", [:rebar3], [], "hexpm"}}

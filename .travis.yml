@@ -1,0 +1,15 @@
+language: elixir
+sudo: false
+elixir:
+  - 1.4
+otp_release:
+  - 18.3
+  - 19.1
+env:
+  - MIX_ENV=test
+script:
+  - mix test --exclude=expensive
+  - mix test --only=expensive
+notifications:
+  recipients:
+    - paulschoenfelder@gmail.com
