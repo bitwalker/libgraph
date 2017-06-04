@@ -48,7 +48,7 @@ defmodule Graph do
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer, memory: non_neg_integer}
   def info(%__MODULE__{edges: es, vertices: vs} = g) do
-    %{num_edges: es |> Enum.map(&MapSet.size/1) |> Enum.sum,
+    %{num_edges: es |> Enum.map(&MapSet.size(elem(&1, 1))) |> Enum.sum,
       num_vertices: map_size(vs),
       size_in_bytes: :erlang.external_size(g)}
   end

@@ -1,21 +1,27 @@
 defmodule Graph.Queries do
   @moduledoc false
 
-  def topsort(%Graph{vertices: vertices} = g) do
+  def topsort(%Graph{ids: ids} = g) do
     l = revpostorder(g)
-    if length(forest(g, &in_neighbors/3, l)) == map_size(vertices) do
-      l
+    if length(forest(g, &in_neighbors/3, l)) == map_size(ids) do
+      Enum.map(l, &Map.get(ids, &1))
     else
       false
     end
   end
 
-  def preorder(g) do
-    Enum.reverse(revpreorder(g))
+  def preorder(%Graph{ids: ids} = g) do
+    g
+    |> revpreorder()
+    |> Stream.map(fn id -> Map.get(ids, id) end)
+    |> Enum.reverse
   end
 
-  def postorder(g) do
-    Enum.reverse(revpostorder(g))
+  def postorder(%Graph{ids: ids} = g) do
+    g
+    |> revpostorder()
+    |> Stream.map(fn id -> Map.get(ids, id) end)
+    |> Enum.reverse
   end
 
   def is_acyclic?(%Graph{} = g) do
@@ -65,9 +71,10 @@ defmodule Graph.Queries do
   end
 
   defp forest(g, sf, vs, handle_first) do
-    Enum.reduce(vs, {MapSet.new, []}, fn v, {t, ll} ->
+    {_, ll} = List.foldl(vs, {MapSet.new, []}, fn v, {t, ll} ->
       pretraverse(handle_first, v, sf, g, t, ll)
     end)
+    ll
   end
 
   defp pretraverse(:first, v, sf, g, t, ll) do
@@ -75,7 +82,7 @@ defmodule Graph.Queries do
   end
   defp pretraverse(:not_first, v, sf, g, t, ll) do
     if MapSet.member?(t, v) do
-      ll
+      {t, ll}
     else
       ptraverse(sf.(g, v, []), sf, g, t, [], ll)
     end
@@ -89,42 +96,45 @@ defmodule Graph.Queries do
       ptraverse(sf.(g, v, vs), sf, g, t, [v | rs], ll)
     end
   end
-  defp ptraverse([], _sf, _g, _t, [], ll), do: ll
-  defp ptraverse([], _sf, _g, _t, rs, ll), do: [rs | ll]
+  defp ptraverse([], _sf, _g, t, [], ll), do: {t, ll}
+  defp ptraverse([], _sf, _g, t, rs, ll), do: {t, [rs | ll]}
 
   defp revpreorder(g) do
     :lists.append(forest(g, &out_neighbors/3))
   end
 
   def revpostorder(%Graph{ids: ids} = g) do
-    posttraverse(Map.keys(ids), g, MapSet.new, [])
+    {_, l} = posttraverse(Map.keys(ids), g, MapSet.new, [])
+    l
   end
 
   defp posttraverse([v | vs], g, t, l) do
     {t, l} = if MapSet.member?(t, v) do
           {t, l}
         else
-          {MapSet.put(t, v), [v | posttraverse(out_neighbors(g, v, []), g, t, l)]}
+          t = MapSet.put(t, v)
+          {t2, l2} = posttraverse(out_neighbors(g, v, []), g, t, l)
+          {t2, [v|l2]}
         end
     posttraverse(vs, g, t, l)
   end
-  defp posttraverse([], _g, _t, l), do: l
+  defp posttraverse([], _g, t, l), do: {t, l}
 
   defp in_neighbors(%Graph{edges: edges}, v, vs) do
     Enum.reduce(edges, vs, fn {v1, out_edges}, acc ->
       if MapSet.member?(out_edges, v) do
-        acc
-      else
         [v1|acc]
+      else
+        acc
       end
     end)
   end
 
   defp out_neighbors(%Graph{edges: edges}, v, vs \\ []) do
-    case Map.get(edges, v) do
-      nil -> vs
-      ms -> MapSet.to_list(ms) ++ vs
-    end
+    edges
+    |> Map.get(v, MapSet.new)
+    |> MapSet.to_list
+    |> Enum.concat(vs)
   end
 
   defp inout(g, v, vs) do
