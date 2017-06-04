@@ -22,9 +22,6 @@ defmodule GraphTest do
     assert :digraph_utils.is_acyclic(dg)
 
     g = build_basic_acyclic_graph()
-
-    dg_sorted = :digraph_utils.topsort(dg)
-    assert ^dg_sorted = Graph.topsort(g)
     assert Graph.is_acyclic?(g)
     refute Graph.is_cyclic?(g)
   end
@@ -35,6 +32,15 @@ defmodule GraphTest do
 
     g = build_basic_tree_graph()
     assert Graph.is_tree?(g)
+  end
+
+  test "topsort" do
+    dg = build_basic_acyclic_digraph()
+    dg_sorted = :digraph_utils.topsort(dg)
+    assert is_list(dg_sorted)
+
+    g = build_basic_acyclic_graph()
+    assert ^dg_sorted = Graph.topsort(g)
   end
 
   test "find all paths" do
