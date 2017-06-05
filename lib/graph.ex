@@ -72,13 +72,13 @@ defmodule Graph do
   to every other vertex in the graph.
   """
   @spec is_arborescence?(t) :: boolean
-  defdelegate is_arborescence?(g), to: Graph.Queries
+  defdelegate is_arborescence?(g), to: Graph.Impl
 
   @doc """
   Returns true if and only if the graph `g` is acyclic.
   """
   @spec is_acyclic?(t) :: boolean
-  defdelegate is_acyclic?(g), to: Graph.Queries
+  defdelegate is_acyclic?(g), to: Graph.Impl
 
   @doc """
   Returns true if the graph `g` is not acyclic.
@@ -99,7 +99,7 @@ defmodule Graph do
   Example usages can be found in the test suite.
   """
   @spec get_shortest_path(t, vertex, vertex) :: [vertex]
-  defdelegate get_shortest_path(g, a, b), to: Graph.Pathfinder
+  defdelegate get_shortest_path(g, a, b), to: Graph.Pathing, as: :shortest_path
 
   @doc """
   Builds a list of paths between vertex `a` and vertex `b`.
@@ -111,7 +111,7 @@ defmodule Graph do
   Example usages can be found in the test suite.
   """
   @spec get_paths(t, vertex, vertex) :: [[vertex]]
-  defdelegate get_paths(g, a, b), to: Graph.Pathfinder
+  defdelegate get_paths(g, a, b), to: Graph.Pathing, as: :all
 
   @doc """
   Return a list of all the edges, where each edge is expressed as a tuple
@@ -353,7 +353,7 @@ defmodule Graph do
   For each vertex in the returned list, no out-neighbors occur earlier in the list.
   """
   @spec topsort(t) :: [vertex]
-  defdelegate topsort(g), to: Graph.Queries
+  defdelegate topsort(g), to: Graph.Impl
 
   @doc """
   Returns a list of connected components, where each component is a list of vertices.
@@ -369,7 +369,7 @@ defmodule Graph do
   See the test suite for an example of how this is used.
   """
   @spec components(t) :: [[vertex]]
-  defdelegate components(g), to: Graph.Queries
+  defdelegate components(g), to: Graph.Impl
 
   @doc """
   Returns a list of strongly connected components, where each component is a list of vertices.
@@ -382,7 +382,7 @@ defmodule Graph do
   See the test suite for an example of how this is used.
   """
   @spec strong_components(t) :: [[vertex]]
-  defdelegate strong_components(g), to: Graph.Queries
+  defdelegate strong_components(g), to: Graph.Impl
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -391,7 +391,7 @@ defmodule Graph do
   As paths of length zero are allowed, the vertices of `vs` are also included in the returned list.
   """
   @spec reachable(t, [vertex]) :: [[vertex]]
-  defdelegate reachable(g, vs), to: Graph.Queries
+  defdelegate reachable(g, vs), to: Graph.Impl
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -400,7 +400,7 @@ defmodule Graph do
   As a consequence, only those vertices of `vs` that are included in some cycle are returned.
   """
   @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
-  defdelegate reachable_neighbors(g, vs), to: Graph.Queries
+  defdelegate reachable_neighbors(g, vs), to: Graph.Impl
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -409,7 +409,7 @@ defmodule Graph do
   As paths of length zero are allowed, the vertices of `vs` are also included in the returned list.
   """
   @spec reaching(t, [vertex]) :: [[vertex]]
-  defdelegate reaching(g, vs), to: Graph.Queries
+  defdelegate reaching(g, vs), to: Graph.Impl
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -418,14 +418,14 @@ defmodule Graph do
   As a consequence, only those vertices of `vs` that are included in some cycle are returned.
   """
   @spec reaching_neighbors(t, [vertex]) :: [[vertex]]
-  defdelegate reaching_neighbors(g, vs), to: Graph.Queries
+  defdelegate reaching_neighbors(g, vs), to: Graph.Impl
 
   @doc """
   Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
   collecting visited vertices in preorder.
   """
   @spec preorder(t) :: [vertex]
-  defdelegate preorder(g), to: Graph.Queries
+  defdelegate preorder(g), to: Graph.Impl
 
   @doc """
   Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
@@ -434,13 +434,13 @@ defmodule Graph do
   the subsequently visited vertices.
   """
   @spec postorder(t) :: [vertex]
-  defdelegate postorder(g), to: Graph.Queries
+  defdelegate postorder(g), to: Graph.Impl
 
   @doc """
   Returns a list of vertices from graph `g` which are included in a loop.
   """
   @spec loop_vertices(t) :: [vertex]
-  defdelegate loop_vertices(g), to: Graph.Queries
+  defdelegate loop_vertices(g), to: Graph.Impl
 
   @doc """
   Returns the in-degree of vertex `v` of graph `g`.

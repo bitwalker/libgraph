@@ -1,7 +1,13 @@
-defmodule Graph.Pathfinder do
-  @moduledoc false
+defmodule Graph.Pathing do
+  @moduledoc """
+  This module contains implementation code for path finding algorithms used by `libgraph`.
+  """
 
-  def get_shortest_path(%Graph{edges: edges, vertices: vertices, ids: ids} = g, a, b) do
+  @doc """
+  Finds the shortest path between `a` and `b` as a list of vertices.
+  Returns `nil` if no path can be found.
+  """
+  def shortest_path(%Graph{edges: edges, vertices: vertices, ids: ids} = g, a, b) do
     case Map.get(vertices, a) do
       nil ->
         nil
@@ -28,7 +34,11 @@ defmodule Graph.Pathfinder do
     end
   end
 
-  def get_paths(%Graph{edges: edges, vertices: vertices, ids: ids} = g, a, b) do
+  @doc """
+  Finds all paths between `a` and `b`, each path as a list of vertices.
+  Returns `nil` if no path can be found.
+  """
+  def all(%Graph{edges: edges, vertices: vertices, ids: ids} = g, a, b) do
     case Map.get(vertices, a) do
       nil ->
         nil

@@ -1,4 +1,4 @@
-defmodule Graph.Queries do
+defmodule Graph.Impl do
   @moduledoc false
 
   def topsort(%Graph{ids: ids} = g) do
