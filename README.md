@@ -51,12 +51,12 @@ The following are items I plan to implement soon - they are not in any particula
 - [x] is_cyclic?/1
 - [x] is_acyclic?/1
 - [x] is_tree?/1
-- [ ] is_aborescence?
+- [x] is_aborescence?
 - [x] components/1
 - [x] reachable/2
 - [x] postorder/1 and preorder/1
 - [x] subgraph/2
-- [ ] QuickCheck model and associated tests
+- [x] QuickCheck model and associated tests
 
 ## License
 
