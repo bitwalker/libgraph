@@ -2,7 +2,7 @@ defmodule Graph.Impl do
   @moduledoc false
 
   def topsort(%Graph{ids: ids} = g) do
-    l = revpostorder(g)
+    l = reverse_postorder(g)
     if length(forest(g, &in_neighbors/3, l)) == map_size(ids) do
       Enum.map(l, &Map.get(ids, &1))
     else
@@ -12,14 +12,14 @@ defmodule Graph.Impl do
 
   def preorder(%Graph{ids: ids} = g) do
     g
-    |> revpreorder()
+    |> reverse_preorder()
     |> Stream.map(fn id -> Map.get(ids, id) end)
     |> Enum.reverse
   end
 
   def postorder(%Graph{ids: ids} = g) do
     g
-    |> revpostorder()
+    |> reverse_postorder()
     |> Stream.map(fn id -> Map.get(ids, id) end)
     |> Enum.reverse
   end
@@ -65,7 +65,7 @@ defmodule Graph.Impl do
   end
 
   def strong_components(%Graph{ids: ids} = g) do
-    for component <- forest(g, &in_neighbors/3, revpostorder(g)) do
+    for component <- forest(g, &in_neighbors/3, reverse_postorder(g)) do
       for id <- component, do: Map.get(ids, id)
     end
   end
@@ -88,63 +88,63 @@ defmodule Graph.Impl do
 
   ## Private
 
-  defp forest(%Graph{ids: ids} = g, sf) do
-    forest(g, sf, Map.keys(ids))
+  defp forest(%Graph{ids: ids} = g, fun) do
+    forest(g, fun, Map.keys(ids))
   end
 
-  defp forest(g, sf, vs) do
-    forest(g, sf, vs, :first)
+  defp forest(g, fun, vs) do
+    forest(g, fun, vs, :first)
   end
 
-  defp forest(g, sf, vs, handle_first) do
-    {_, ll} = List.foldl(vs, {MapSet.new, []}, fn v, {t, ll} ->
-      pretraverse(handle_first, v, sf, g, t, ll)
+  defp forest(g, fun, vs, handle_first) do
+    {_, acc} = List.foldl(vs, {MapSet.new, []}, fn v, {visited, acc} ->
+      pretraverse(handle_first, v, fun, g, visited, acc)
     end)
-    ll
+    acc
   end
 
-  defp pretraverse(:first, v, sf, g, t, ll) do
-    ptraverse([v], sf, g, t, [], ll)
+  defp pretraverse(:first, v, fun, g, visited, acc) do
+    ptraverse([v], fun, g, visited, [], acc)
   end
-  defp pretraverse(:not_first, v, sf, g, t, ll) do
-    if MapSet.member?(t, v) do
-      {t, ll}
+  defp pretraverse(:not_first, v, fun, g, visited, acc) do
+    if MapSet.member?(visited, v) do
+      {visited, acc}
     else
-      ptraverse(sf.(g, v, []), sf, g, t, [], ll)
+      ptraverse(fun.(g, v, []), fun, g, visited, [], acc)
     end
   end
 
-  defp ptraverse([v | vs], sf, g, t, rs, ll) do
-    if MapSet.member?(t, v) do
-      ptraverse(vs, sf, g, t, rs, ll)
+  defp ptraverse([v | vs], fun, g, visited, results, acc) do
+    if MapSet.member?(visited, v) do
+      ptraverse(vs, fun, g, visited, results, acc)
     else
-      t = MapSet.put(t, v)
-      ptraverse(sf.(g, v, vs), sf, g, t, [v | rs], ll)
+      visited = MapSet.put(visited, v)
+      ptraverse(fun.(g, v, vs), fun, g, visited, [v | results], acc)
     end
   end
-  defp ptraverse([], _sf, _g, t, [], ll), do: {t, ll}
-  defp ptraverse([], _sf, _g, t, rs, ll), do: {t, [rs | ll]}
+  defp ptraverse([], _fun, _g, visited, [], acc), do: {visited, acc}
+  defp ptraverse([], _fun, _g, visited, results, acc), do: {visited, [results|acc]}
 
-  defp revpreorder(g) do
+  defp reverse_preorder(g) do
     :lists.append(forest(g, &out_neighbors/3))
   end
 
-  def revpostorder(%Graph{ids: ids} = g) do
+  def reverse_postorder(%Graph{ids: ids} = g) do
     {_, l} = posttraverse(Map.keys(ids), g, MapSet.new, [])
     l
   end
 
-  defp posttraverse([v | vs], g, t, l) do
-    {t, l} = if MapSet.member?(t, v) do
-          {t, l}
+  defp posttraverse([v | vs], g, visited, acc) do
+    {visited, acc} = if MapSet.member?(visited, v) do
+          {visited, acc}
         else
-          t = MapSet.put(t, v)
-          {t2, l2} = posttraverse(out_neighbors(g, v, []), g, t, l)
-          {t2, [v|l2]}
+          visited = MapSet.put(visited, v)
+          {visited2, acc2} = posttraverse(out_neighbors(g, v, []), g, visited, acc)
+          {visited2, [v|acc2]}
         end
-    posttraverse(vs, g, t, l)
+    posttraverse(vs, g, visited, acc)
   end
-  defp posttraverse([], _g, t, l), do: {t, l}
+  defp posttraverse([], _g, visited, acc), do: {visited, acc}
 
   defp in_neighbors(%Graph{edges: edges}, v, vs \\ []) do
     Enum.reduce(edges, vs, fn {v1, out_edges}, acc ->
