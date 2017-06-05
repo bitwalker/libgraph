@@ -67,6 +67,14 @@ defmodule Graph do
   end
 
   @doc """
+  Returns true if the graph is an aborescence, a directed acyclic graph,
+  where the *root*, a vertex, of the arborescence has a unique path from itself
+  to every other vertex in the graph.
+  """
+  @spec is_arborescence?(t) :: boolean
+  defdelegate is_arborescence?(g), to: Graph.Queries
+
+  @doc """
   Returns true if and only if the graph `g` is acyclic.
   """
   @spec is_acyclic?(t) :: boolean
@@ -175,6 +183,20 @@ defmodule Graph do
   end
 
   @doc """
+  Like `add_vertex/2`, but takes a list of vertices to add to the graph.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :a])
+      ...> Graph.vertices(g)
+      [:a, :b]
+  """
+  @spec add_vertices(t, [vertex]) :: t
+  def add_vertices(%__MODULE__{} = g, vs) when is_list(vs) do
+    Enum.reduce(vs, g, &add_vertex(&2, &1))
+  end
+
+  @doc """
   Removes a vertex from the graph, as well as any edges which refer to that vertex. If the vertex does
   not exist in the graph, it is a no-op.
 
@@ -203,6 +225,20 @@ defmodule Graph do
   end
 
   @doc """
+  Like `delete_vertex/2`, but takes a list of vertices to delete from the graph.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.delete_vertices([:a, :b])
+      ...> Graph.vertices(g)
+      [:c]
+  """
+  @spec delete_vertices(t, [vertex]) :: t
+  def delete_vertices(%__MODULE__{} = g, vs) when is_list(vs) do
+    Enum.reduce(vs, g, &delete_vertex(&2, &1))
+  end
+
+  @doc """
   Adds an edge connecting `a` to `b`. If either `a` or `b` do not exist in the graph,
   they are automatically added. Adding the same edge more than once does not create multiple edges,
   each edge is only ever stored once.
@@ -226,6 +262,31 @@ defmodule Graph do
                   ms  -> MapSet.put(ms, b_id)
                 end
     %__MODULE__{g | edges: Map.put(es, a_id, neighbors)}
+  end
+
+  @doc """
+  Like `add_edge/3`, but takes a list of vertex pairs, and adds an edge to the graph for each pair.
+
+  ## Examples
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> Graph.edges(g)
+      [{:a, :b}, {:b, :c}]
+
+      iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
+      {:error, {:invalid_vertex_pair, :a}}
+  """
+  @spec add_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_vertex_pair, term}}
+  def add_edges(%__MODULE__{} = g, es) when is_list(es) do
+    Enum.reduce(es, g, fn
+      {v1, v2}, acc ->
+        add_edge(acc, v1, v2)
+      bad_pair, _acc ->
+        throw {:error, {:invalid_vertex_pair, bad_pair}}
+    end)
+  catch
+    :throw, {:error, {:invalid_vertex_pair, _}} = err ->
+      err
   end
 
   @doc """
@@ -257,6 +318,34 @@ defmodule Graph do
             end
         end
     end
+  end
+
+  @doc """
+  Like `delete_edge/3`, but takes a list of vertex pairs, and deletes the corresponding
+  edge from the graph, if it exists.
+
+  ## Examples
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
+      ...> g = Graph.delete_edges(g, [{:a, :b}])
+      ...> Graph.edges(g)
+      []
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
+      ...> Graph.delete_edges(g, [:a])
+      {:error, {:invalid_vertex_pair, :a}}
+  """
+  @spec delete_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_vertex_pair, term}}
+  def delete_edges(%__MODULE__{} = g, es) when is_list(es) do
+    Enum.reduce(es, g, fn
+      {v1, v2}, acc ->
+        delete_edge(acc, v1, v2)
+      bad_pair, _acc ->
+        throw {:error, {:invalid_vertex_pair, bad_pair}}
+    end)
+  catch
+    :throw, {:error, {:invalid_vertex_pair, _}} = err ->
+      err
   end
 
   @doc """
@@ -399,9 +488,9 @@ defmodule Graph do
       v_id ->
         Enum.reduce(edges, [], fn {v1_id, out_edges}, acc ->
           if MapSet.member?(out_edges, v_id) do
-            acc
-          else
             [Map.get(vertices, v1_id)|acc]
+          else
+            acc
           end
         end)
     end
@@ -429,12 +518,17 @@ defmodule Graph do
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
-  def subgraph(%__MODULE__{edges: es, vertices: vs, ids: ids} = g, vs) do
-    allowed = vs |> Enum.map(&Map.get(ids, &1)) |> MapSet.new
-    Enum.reduce(vs, new(), fn v, sg ->
-      v_id = Map.get(vs, v)
-      v_edges = es |> Map.get(v_id, MapSet.new) |> MapSet.intersection(allowed) |> MapSet.to_list
-      add_edges(v_edges, v, g, sg, MapSet.new([v_id]), allowed)
+  def subgraph(%__MODULE__{edges: edges, vertices: vertices} = g, vs) do
+    allowed = vs |> Enum.map(&Map.get(vertices, &1)) |> Enum.reject(&is_nil/1) |> MapSet.new
+    vs
+    |> Enum.reduce(new(), fn v, sg ->
+      case Map.get(vertices, v) do
+        nil ->
+          sg
+        v_id ->
+          v_edges = edges |> Map.get(v_id, MapSet.new) |> MapSet.intersection(allowed) |> MapSet.to_list
+          add_edges(v_edges, v, g, sg, MapSet.new([v_id]), allowed)
+      end
     end)
   end
 

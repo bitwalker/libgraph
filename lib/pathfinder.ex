@@ -10,14 +10,19 @@ defmodule Graph.Pathfinder do
           nil ->
             nil
           b_id ->
-            tree = Graph.new |> Graph.add_vertex(a_id)
-            q = :queue.new()
-            q = Map.get(edges, a_id) |> MapSet.to_list |> List.foldl(q, fn id, q -> :queue.in({a_id, id}, q) end)
-            case do_shortpath(q, g, b_id, tree) do
+            case Map.get(edges, a_id) do
               nil ->
                 nil
-              path ->
-                for id <- path, do: Map.get(ids, id)
+              a_out ->
+                tree = Graph.new |> Graph.add_vertex(a_id)
+                q = :queue.new()
+                q = a_out |> MapSet.to_list |> List.foldl(q, fn id, q -> :queue.in({a_id, id}, q) end)
+                case do_shortpath(q, g, b_id, tree) do
+                  nil ->
+                    nil
+                  path ->
+                    for id <- path, do: Map.get(ids, id)
+                end
             end
         end
     end
@@ -51,25 +56,31 @@ defmodule Graph.Pathfinder do
       {{:value, {v_id, ^target_id}}, _q1} ->
         follow_path(v_id, tree, [target_id])
       {{:value, {v1_id, v2_id}}, q1} ->
-        if Map.has_key?(tree.ids, v2_id) do
+        if Map.has_key?(tree.vertices, v2_id) do
           do_shortpath(q1, g, target_id, tree)
         else
-          tree = tree |> Graph.add_vertex(v2_id) |> Graph.add_edge(v2_id, v1_id)
-          q2 = edges |> Map.get(v2_id) |> MapSet.to_list |> List.foldl(q1, fn id, q -> :queue.in({v2_id, id}, q) end)
-          do_shortpath(q2, g, target_id, tree)
+          case Map.get(edges, v2_id) do
+            nil ->
+              do_shortpath(q1, g, target_id, tree)
+            v2_out ->
+              tree = tree |> Graph.add_vertex(v2_id) |> Graph.add_edge(v2_id, v1_id)
+              q2 = v2_out |> MapSet.to_list |> List.foldl(q1, fn id, q -> :queue.in({v2_id, id}, q) end)
+              do_shortpath(q2, g, target_id, tree)
+          end
         end
       {:empty, _} ->
         nil
     end
   end
 
-  defp follow_path(v_id, %Graph{edges: edges} = tree, path) do
+  defp follow_path(v_id, %Graph{vertices: vertices, ids: ids, edges: edges} = tree, path) do
     path = [v_id | path]
-    case edges |> Map.get(v_id, MapSet.new) |> MapSet.to_list do
+    v_id_tree = Map.get(vertices, v_id)
+    case edges |> Map.get(v_id_tree, MapSet.new) |> MapSet.to_list do
       [] ->
         path
       [next_id] ->
-        follow_path(next_id, tree, path)
+        follow_path(Map.get(ids, next_id), tree, path)
     end
   end
 

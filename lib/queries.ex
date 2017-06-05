@@ -24,11 +24,33 @@ defmodule Graph.Queries do
     |> Enum.reverse
   end
 
+  def is_arborescence?(%Graph{} = g) do
+    arborescence_root(g) != nil
+  end
+
+  def arborescence_root(%Graph{edges: es, ids: ids} = g) when map_size(es) == (map_size(ids) - 1) do
+    [root] = List.foldl(ids, [], fn v, acc ->
+      case length(in_neighbors(g, v)) do
+        1 -> acc
+        0 when acc == [] -> [v]
+      end
+    end)
+    root
+  catch
+    _, _ ->
+      nil
+  end
+  def arborescence_root(_g), do: nil
+
   def is_acyclic?(%Graph{} = g) do
-    loop_vertices(g) == [] and topsort(g) != false
+    loop_vertices_w_ids(g) == [] and topsort(g) != false
   end
 
   def loop_vertices(%Graph{ids: ids} = g) do
+    for id <- loop_vertices_w_ids(g), do: Map.get(ids, id)
+  end
+
+  defp loop_vertices_w_ids(%Graph{ids: ids} = g) do
     for v <- Map.keys(ids), is_reflexive_vertex(g, v), do: v
   end
 
@@ -36,28 +58,32 @@ defmodule Graph.Queries do
     Enum.member?(out_neighbors(g, v), v)
   end
 
-  def components(g) do
-    forest(g, &inout/3)
+  def components(%Graph{ids: ids} = g) do
+    for component <- forest(g, &inout/3) do
+      for id <- component, do: Map.get(ids, id)
+    end
   end
 
-  def strong_components(g) do
-    forest(g, &in_neighbors/3, revpostorder(g))
+  def strong_components(%Graph{ids: ids} = g) do
+    for component <- forest(g, &in_neighbors/3, revpostorder(g)) do
+      for id <- component, do: Map.get(ids, id)
+    end
   end
 
-  def reachable(g, vs) when is_list(vs) do
-    :lists.append(forest(g, &out_neighbors/3, vs, :first))
+  def reachable(%Graph{ids: ids} = g, vs) when is_list(vs) do
+    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(ids, id)
   end
 
-  def reachable_neighbors(g, vs) when is_list(vs) do
-    :lists.append(forest(g, &out_neighbors/3, vs, :not_first))
+  def reachable_neighbors(%Graph{ids: ids} = g, vs) when is_list(vs) do
+    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
   end
 
-  def reaching(g, vs) when is_list(vs) do
-    :lists.append(forest(g, &in_neighbors/3, vs, :first))
+  def reaching(%Graph{ids: ids} = g, vs) when is_list(vs) do
+    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(ids, id)
   end
 
-  def reaching_neighbors(g, vs) when is_list(vs) do
-    :lists.append(forest(g, &in_neighbors/3, vs, :not_first))
+  def reaching_neighbors(%Graph{ids: ids} = g, vs) when is_list(vs) do
+    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
   end
 
   ## Private
@@ -120,7 +146,7 @@ defmodule Graph.Queries do
   end
   defp posttraverse([], _g, t, l), do: {t, l}
 
-  defp in_neighbors(%Graph{edges: edges}, v, vs) do
+  defp in_neighbors(%Graph{edges: edges}, v, vs \\ []) do
     Enum.reduce(edges, vs, fn {v1, out_edges}, acc ->
       if MapSet.member?(out_edges, v) do
         [v1|acc]
