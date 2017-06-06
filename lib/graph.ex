@@ -748,6 +748,24 @@ defmodule Graph do
   end
 
   @doc """
+  Returns a list of `Graph.Edge` structs representing the in edges to vertex `v`.
+  """
+  @spec in_edges(t, vertex) :: Edge.t
+  def in_edges(%__MODULE__{edges_meta: es_meta, vertices: vs, ids: ids} = g, v) do
+    case Map.get(vs, v) do
+      nil ->
+        []
+      v_id ->
+        Graph.Impl.in_neighbors(g, v_id)
+        |> Enum.map(fn v2_id ->
+          v2 = Map.get(ids, v2_id)
+          meta = Map.get(es_meta, {v2_id, v_id}, [])
+          Edge.new(v2, v, meta)
+        end)
+    end
+  end
+
+  @doc """
   Returns a list of vertices which the given vertex `v` has edges going to.
   """
   @spec out_neighbors(t, vertex) :: [vertex]
@@ -758,8 +776,25 @@ defmodule Graph do
       v_id ->
         es
         |> Map.get(v_id, MapSet.new)
-        |> MapSet.to_list
         |> Enum.map(&Map.get(vs, &1))
+    end
+  end
+
+  @doc """
+  Returns a list of `Graph.Edge` structs representing the out edges from vertex `v`.
+  """
+  @spec out_edges(t, vertex) :: Edge.t
+  def out_edges(%__MODULE__{edges_meta: es_meta, vertices: vs, ids: ids} = g, v) do
+    case Map.get(vs, v) do
+      nil ->
+        []
+      v_id ->
+        Graph.Impl.out_neighbors(g, v_id)
+        |> Enum.map(fn v2_id ->
+          v2 = Map.get(ids, v2_id)
+          meta = Map.get(es_meta, {v_id, v2_id}, [])
+          Edge.new(v, v2, meta)
+        end)
     end
   end
 
