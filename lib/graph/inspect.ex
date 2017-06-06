@@ -12,7 +12,7 @@ defimpl Inspect, for: Graph do
     # we also want to respect the inspect options as much as possible, so we do this all the hard way by
     # constructing the inspect algebra by hand
     vs = Inspect.Algebra.to_doc(Map.keys(vs), opts)
-    doc = Inspect.Algebra.concat([Inspect.Algebra.empty, "Graph<vertices:", " ", vs, ",", " ", "edges: [", ""])
+    doc = Inspect.Algebra.concat([Inspect.Algebra.empty, "#Graph<vertices:", " ", vs, ",", " ", "edges: [", ""])
     doc = Stream.map(es, fn {v_id, out_neighbors} ->
       v = Inspect.Algebra.to_doc(Map.get(ids, v_id), opts)
       ns = Enum.map(out_neighbors, &Map.get(ids, &1))
@@ -32,6 +32,6 @@ defimpl Inspect, for: Graph do
     %{num_vertices: num_vertices,
       num_edges: num_edges,
       size_in_bytes: size_in_bytes} = Graph.info(g)
-    "Graph<num_vertices: #{num_vertices}, num_edges: #{num_edges}, size_in_bytes: #{size_in_bytes}>"
+    "#Graph<num_vertices: #{num_vertices}, num_edges: #{num_edges}, size_in_bytes: #{size_in_bytes}>"
   end
 end
