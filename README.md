@@ -41,9 +41,9 @@ end
 
 The following are items I plan to implement soon - they are not in any particular order.
 
-- [ ] Graph reducer, allowing you to manipulate the graph as you walk it
-- [ ] Graph iterators, allow you to walk a graph via BFS/DFS, applying a function as you go
-- [ ] Implement weighted edges, and a corresponding shortest path implementation
+- [x] Graph reducer, allowing you to manipulate the graph as you walk it
+- [x] Graph iterators, allow you to walk a graph via BFS/DFS, applying a function as you go
+- [x] Implement weighted edges, and a corresponding shortest path implementation
 
 ## License
 
