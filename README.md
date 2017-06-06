@@ -33,7 +33,7 @@ by adding `libgraph` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:libgraph, "~> 0.1.0"}]
+  [{:libgraph, "~> 0.1"}]
 end
 ```
 
@@ -41,22 +41,9 @@ end
 
 The following are items I plan to implement soon - they are not in any particular order.
 
-- [x] Basic construction/manipulation of graphs
-- [x] get_paths
-- [x] get_shortest_path
-- [x] topsort/1
-- [x] in_neighbors/2
-- [x] out_neighbors/2
-- [x] info/1
-- [x] is_cyclic?/1
-- [x] is_acyclic?/1
-- [x] is_tree?/1
-- [x] is_aborescence?
-- [x] components/1
-- [x] reachable/2
-- [x] postorder/1 and preorder/1
-- [x] subgraph/2
-- [x] QuickCheck model and associated tests
+- [ ] Graph reducer, allowing you to manipulate the graph as you walk it
+- [ ] Graph iterators, allow you to walk a graph via BFS/DFS, applying a function as you go
+- [ ] Implement weighted edges, and a corresponding shortest path implementation
 
 ## License
 
