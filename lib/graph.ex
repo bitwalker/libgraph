@@ -89,6 +89,40 @@ defmodule Graph do
   end
 
   @doc """
+  Returns true if graph `g1` is a subgraph of `g2`.
+
+  A graph is a subgraph of another graph if it's vertices and edges
+  are a subset of that graph's vertices and edges.
+
+  ## Example
+
+      iex> g1 = Graph.new |> Graph.add_vertices([:a, :b, :c, :d]) |> Graph.add_edge(:a, :b) |> Graph.add_edge(:b, :c)
+      ...> g2 = Graph.new |> Graph.add_vertices([:b, :c]) |> Graph.add_edge(:b, :c)
+      ...> Graph.is_subgraph?(g2, g1)
+      true
+  """
+  @spec is_subgraph?(t, t) :: boolean
+  def is_subgraph?(%__MODULE__{edges: es1, vertices: vs1} = g1, %__MODULE__{edges: es2, vertices: vs2} = g2) do
+    ids1 = g1.ids
+    ids2 = g2.ids
+    for {v, _} <- vs1 do
+      unless Map.has_key?(vs2, v), do: throw(:not_subgraph)
+    end
+    for {g1_v_id, g1_v_out} <- es1 do
+      g1_v_out_full = g1_v_out |> Enum.map(&Map.get(ids1, &1)) |> MapSet.new
+      g2_v_id = Map.get(vs2, Map.get(ids1, g1_v_id))
+      g2_v_out_full = Map.get(es2, g2_v_id, MapSet.new) |> Enum.map(&Map.get(ids2, &1)) |> MapSet.new
+      unless MapSet.subset?(g1_v_out_full, g2_v_out_full) do
+        throw :not_subgraph
+      end
+    end
+    true
+  catch
+    :throw, :not_subgraph ->
+      false
+  end
+
+  @doc """
   Gets the shortest path between `a` and `b`. If there are multiple paths of the same length,
   where all are "shortest", this implementation simply takes the first one encountered.
 
