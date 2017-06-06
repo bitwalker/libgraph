@@ -408,6 +408,30 @@ defmodule Graph do
   end
 
   @doc """
+  The transposition of a graph is another graph with the direction of all the edges reversed.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b) |> Graph.add_edge(:b, :c)
+      ...> g |> Graph.transpose |> Graph.edges
+      [{:b, :a}, {:c, :b}]
+  """
+  @spec transpose(t) :: t
+  def transpose(%__MODULE__{edges: es} = g) do
+    es2 = Enum.reduce(es, %{}, fn {v1, v1_out}, acc ->
+      Enum.reduce(v1_out, acc, fn v2, acc2 ->
+        case Map.get(acc2, v2) do
+          nil ->
+            Map.put(acc2, v2, MapSet.new([v1]))
+          v2_out ->
+            Map.put(acc2, v2, MapSet.put(v2_out, v1))
+        end
+      end)
+    end)
+    %__MODULE__{g | edges: es2}
+  end
+
+  @doc """
   Returns a topological ordering of the vertices of graph `g`, if such an ordering exists, otherwise it returns false.
   For each vertex in the returned list, no out-neighbors occur earlier in the list.
   """
