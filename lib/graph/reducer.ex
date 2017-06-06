@@ -1,5 +1,6 @@
 defmodule Graph.Reducer do
   @moduledoc false
+  alias Graph.Edge
 
   def walk(%Graph{edges: es, ids: ids} = g, acc, fun, opts) when is_function(fun, 4) do
     case Keyword.get(opts, :algorithm, :depth_first) do
@@ -22,8 +23,8 @@ defmodule Graph.Reducer do
       visit_dfs(rest, g, visited, fun, acc)
     else
       v = Map.get(ids, v_id)
-      out_neighbors = Graph.out_neighbors(g, v)
-      in_neighbors = Graph.in_neighbors(g, v)
+      out_neighbors = get_out_edges(g, v, v_id)
+      in_neighbors = get_in_edges(g, v, v_id)
       case fun.(v, out_neighbors, in_neighbors, acc) do
         {:next, acc2} ->
           visited = MapSet.put(visited, v_id)
@@ -54,8 +55,8 @@ defmodule Graph.Reducer do
         else
           v = Map.get(ids, v_id)
           v_out = Map.get(es, v_id, MapSet.new)
-          out_neighbors = Graph.out_neighbors(g, v)
-          in_neighbors = Graph.in_neighbors(g, v)
+          out_neighbors = get_out_edges(g, v, v_id)
+          in_neighbors = get_in_edges(g, v, v_id)
           case fun.(v, out_neighbors, in_neighbors, acc) do
             {:next, acc2} ->
               visited = MapSet.put(visited, v_id)
@@ -79,5 +80,25 @@ defmodule Graph.Reducer do
         q2 = :queue.in(v_id, q1)
         visit_bfs(q2, vs, g, visited, fun, acc)
     end
+  end
+
+  defp get_out_edges(%Graph{edges: es, edges_meta: es_meta, ids: ids}, v, v_id) do
+    es
+    |> Map.get(v_id, [])
+    |> Enum.map(fn v2_id ->
+      v2 = Map.get(ids, v2_id)
+      meta = Map.get(es_meta, {v_id, v2_id}, [])
+      Edge.new(v, v2, meta)
+    end)
+  end
+
+  def get_in_edges(%Graph{edges: es, edges_meta: es_meta, ids: ids}, v, v_id) do
+    es
+    |> Stream.filter(fn {_, v_out} -> MapSet.member?(v_out, v_id) end)
+    |> Enum.map(fn {v2_id, _} ->
+      v2 = Map.get(ids, v2_id)
+      meta = Map.get(es_meta, {v2_id, v_id}, [])
+      Edge.new(v2, v, meta)
+    end)
   end
 end

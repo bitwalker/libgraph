@@ -27,9 +27,12 @@ defmodule Graph do
   not yet implemented, or do not have the same use case, I would stick to `:digraph` for now.
   """
   defstruct edges: %{},
+            edges_meta: %{},
             vertices: %{},
             ids: %{},
             next_id: 0
+
+  alias Graph.Edge
 
   @opaque t :: %__MODULE__{}
   @type vertex :: term
@@ -162,15 +165,18 @@ defmodule Graph do
       iex> g = Graph.new |> Graph.add_vertex(:a) |> Graph.add_vertex(:b) |> Graph.add_vertex(:c)
       ...> g = g |> Graph.add_edge(:a, :c) |> Graph.add_edge(:b, :c)
       ...> Graph.edges(g)
-      [{:a, :c}, {:b, :c}]
+      [%Graph.Edge{v1: :a, v2: :c}, %Graph.Edge{v1: :b, v2: :c}]
 
   """
   @spec edges(t) :: [edge]
-  def edges(%__MODULE__{edges: edges, ids: ids}) do
+  def edges(%__MODULE__{edges: edges, edges_meta: edges_meta, ids: ids}) do
     edges
     |> Enum.flat_map(fn {source_id, out_neighbors} ->
       source = Map.get(ids, source_id)
-      for out_neighbor <- out_neighbors, do: {source, Map.get(ids, out_neighbor)}
+      for out_neighbor <- out_neighbors do
+        meta = Map.get(edges_meta, {source_id, out_neighbor}, [])
+        Edge.new(source, Map.get(ids, out_neighbor), meta)
+      end
     end)
   end
 
@@ -240,7 +246,7 @@ defmodule Graph do
       ...> g = Graph.replace_vertex(g, :a, :c)
       ...> [:b, :c] = Graph.vertices(g)
       ...> Graph.edges(g)
-      [{:c, :b}]
+      [%Graph.Edge{v1: :c, v2: :b}]
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
   def replace_vertex(%__MODULE__{vertices: vs, ids: ids} = g, vertex, new_vertex) do
@@ -262,23 +268,33 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_vertex(:a) |> Graph.add_vertex(:b) |> Graph.add_edge(:a, :b)
       ...> [:a, :b] = Graph.vertices(g)
-      ...> [{:a, :b}] = Graph.edges(g)
+      ...> [%Graph.Edge{v1: :a, v2: :b}] = Graph.edges(g)
       ...> g = Graph.delete_vertex(g, :b)
       ...> [:a] = Graph.vertices(g)
       ...> Graph.edges(g)
       []
   """
   @spec delete_vertex(t, vertex) :: t
-  def delete_vertex(%__MODULE__{edges: es, vertices: vs, ids: ids} = g, vertex) do
+  def delete_vertex(%__MODULE__{edges: es, edges_meta: es_meta, vertices: vs, ids: ids} = g, vertex) do
     case Map.get(vs, vertex) do
       nil ->
         g
       v_id ->
-        edges = for {source_id, neighbors} <- es, source_id != v_id, do: {source_id, MapSet.delete(neighbors, v_id)}, into: %{}
+        edges =
+          es
+          |> Map.delete(v_id)
+          |> Enum.reduce(%{}, fn {source_id, neighbors}, es2 ->
+            Map.put(es2, source_id, MapSet.delete(neighbors, v_id))
+          end)
+        edges_meta =
+          es_meta
+          |> Enum.reject(fn {{v1_id, v2_id}, _} -> v_id == v1_id || v_id == v2_id end)
+          |> Enum.into(%{})
         %__MODULE__{g |
                     vertices: Map.delete(vs, vertex),
-                    ids: for {id, _} = kv <- ids, id != v_id, into: %{} do kv end,
-                    edges: edges}
+                    ids: Map.delete(ids, v_id),
+                    edges: edges,
+                    edges_meta: edges_meta}
     end
   end
 
@@ -297,20 +313,46 @@ defmodule Graph do
   end
 
   @doc """
+  Like `add_edge/3` or `add_edge/4`, but takes a `Graph.Edge` struct created with
+  `Graph.Edge.new/2` or `Graph.Edge.new/3`.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edge(Graph.Edge.new(:a, :b))
+      ...> [:a, :b] = Graph.vertices(g)
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b}]
+  """
+  @spec add_edge(t, Edge.t) :: t
+  def add_edge(%__MODULE__{} = g, %Edge{v1: v1, v2: v2} = edge) do
+    opts = Enum.reject([label: edge.label, weight: edge.weight], fn {_, v} -> is_nil(v) end)
+    add_edge(g, v1, v2, opts)
+  end
+
+  @doc """
   Adds an edge connecting `a` to `b`. If either `a` or `b` do not exist in the graph,
   they are automatically added. Adding the same edge more than once does not create multiple edges,
   each edge is only ever stored once.
+
+  Edges have a default weight of 1, and an empty (nil) label. You can change this by passing options
+  to this function, as shown below.
 
   ## Example
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b)
       ...> [:a, :b] = Graph.vertices(g)
       ...> Graph.edges(g)
-      [{:a, :b}]
+      [%Graph.Edge{v1: :a, v2: :b, label: nil, weight: 1}]
+
+      iex> g = Graph.new |> Graph.add_edge(:a, :b, label: :foo, weight: 2)
+      ...> [:a, :b] = Graph.vertices(g)
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
   """
   @spec add_edge(t, vertex, vertex) :: t
-  def add_edge(%__MODULE__{} = g, a, b) do
-    %__MODULE__{edges: es, vertices: vs} = g =
+  @spec add_edge(t, vertex, vertex, Edge.edge_opts) :: t
+  def add_edge(%__MODULE__{} = g, a, b, opts \\ []) do
+    %__MODULE__{edges: es, edges_meta: es_meta, vertices: vs} = g =
       g |> add_vertex(a) |> add_vertex(b)
 
     a_id = Map.get(vs, a)
@@ -319,31 +361,38 @@ defmodule Graph do
                   nil -> MapSet.new([b_id])
                   ms  -> MapSet.put(ms, b_id)
                 end
-    %__MODULE__{g | edges: Map.put(es, a_id, neighbors)}
+    %__MODULE__{g |
+      edges: Map.put(es, a_id, neighbors),
+      edges_meta: Map.put(es_meta, {a_id, b_id}, opts)
+    }
   end
 
   @doc """
-  Like `add_edge/3`, but takes a list of vertex pairs, and adds an edge to the graph for each pair.
+  Like `add_edge/3`, but takes a list of `Graph.Edge` structs, and adds an edge to the graph for each pair.
+
+  See the docs for `Graph.Edge.new/2` or `Graph.Edge.new/3` for more info.
 
   ## Examples
 
-      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      iex> alias Graph.Edge
+      ...> edges = [Edge.new(:a, :b), Edge.new(:b, :c, weight: 2)]
+      ...> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges(edges)
       ...> Graph.edges(g)
-      [{:a, :b}, {:b, :c}]
+      [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
 
       iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
-      {:error, {:invalid_vertex_pair, :a}}
+      {:error, {:invalid_edge, :a}}
   """
-  @spec add_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_vertex_pair, term}}
+  @spec add_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_edge, term}}
   def add_edges(%__MODULE__{} = g, es) when is_list(es) do
     Enum.reduce(es, g, fn
-      {v1, v2}, acc ->
-        add_edge(acc, v1, v2)
-      bad_pair, _acc ->
-        throw {:error, {:invalid_vertex_pair, bad_pair}}
+      %Edge{} = edge, acc ->
+        add_edge(acc, edge)
+      bad_edge, _acc ->
+        throw {:error, {:invalid_edge, bad_edge}}
     end)
   catch
-    :throw, {:error, {:invalid_vertex_pair, _}} = err ->
+    :throw, {:error, {:invalid_edge, _}} = err ->
       err
   end
 
@@ -352,15 +401,17 @@ defmodule Graph do
   the edge between `v1` and `v2`, and inserting an edge from `v1` to `v3` and from
   `v3` to `v2`.
 
+  The two resulting edges from the split will share the same weight and label.
+
   ## Example
 
-      iex> g = Graph.new |> Graph.add_vertices([:a, :c]) |> Graph.add_edge(:a, :c)
+      iex> g = Graph.new |> Graph.add_vertices([:a, :c]) |> Graph.add_edge(:a, :c, weight: 2)
       ...> g = Graph.split_edge(g, :a, :c, :b)
       ...> Graph.edges(g)
-      [{:a, :b}, {:b, :c}]
+      [%Graph.Edge{v1: :a, v2: :b, weight: 2}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
-  def split_edge(%__MODULE__{vertices: vs, edges: es} = g, v1, v2, v3) do
+  def split_edge(%__MODULE__{vertices: vs, edges: es, edges_meta: es_meta} = g, v1, v2, v3) do
     case {Map.get(vs, v1), Map.get(vs, v2)} do
       {v1_id, v2_id} when is_nil(v1_id) or is_nil(v2_id) ->
         {:error, :no_such_edge}
@@ -370,11 +421,12 @@ defmodule Graph do
             {:error, :no_such_edge}
           v1_out ->
             if MapSet.member?(v1_out, v2_id) do
+              meta = Map.get(es_meta, {v1_id, v2_id}, [])
               v1_out = MapSet.delete(v1_out, v2_id)
               %__MODULE__{g | edges: Map.put(es, v1_id, v1_out)}
               |> add_vertex(v3)
-              |> add_edge(v1, v3)
-              |> add_edge(v3, v2)
+              |> add_edge(v1, v3, meta)
+              |> add_edge(v3, v2, meta)
             else
               {:error, :no_such_edge}
             end
@@ -393,7 +445,7 @@ defmodule Graph do
       ...> Graph.edges(g)
       []
   """
-  def delete_edge(%__MODULE__{edges: es, vertices: vs} = g, a, b) do
+  def delete_edge(%__MODULE__{edges: es, edges_meta: es_meta, vertices: vs} = g, a, b) do
     case Map.get(vs, a) do
       nil ->
         g
@@ -407,7 +459,10 @@ defmodule Graph do
                 g
               neighbors ->
                 new_neighbors = MapSet.delete(neighbors, b_id)
-                %__MODULE__{g | edges: Map.put(es, a_id, new_neighbors)}
+                es_meta_new = Map.delete(es_meta, {a_id, b_id})
+                %__MODULE__{g |
+                  edges: Map.put(es, a_id, new_neighbors),
+                  edges_meta: es_meta_new}
             end
         end
     end
@@ -426,18 +481,18 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
       ...> Graph.delete_edges(g, [:a])
-      {:error, {:invalid_vertex_pair, :a}}
+      {:error, {:invalid_edge, :a}}
   """
-  @spec delete_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_vertex_pair, term}}
+  @spec delete_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_edge, term}}
   def delete_edges(%__MODULE__{} = g, es) when is_list(es) do
     Enum.reduce(es, g, fn
       {v1, v2}, acc ->
         delete_edge(acc, v1, v2)
-      bad_pair, _acc ->
-        throw {:error, {:invalid_vertex_pair, bad_pair}}
+      bad_edge, _acc ->
+        throw {:error, {:invalid_edge, bad_edge}}
     end)
   catch
-    :throw, {:error, {:invalid_vertex_pair, _}} = err ->
+    :throw, {:error, {:invalid_edge, _}} = err ->
       err
   end
 
@@ -448,21 +503,27 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b) |> Graph.add_edge(:b, :c)
       ...> g |> Graph.transpose |> Graph.edges
-      [{:b, :a}, {:c, :b}]
+      [%Graph.Edge{v1: :b, v2: :a}, %Graph.Edge{v1: :c, v2: :b}]
   """
   @spec transpose(t) :: t
-  def transpose(%__MODULE__{edges: es} = g) do
-    es2 = Enum.reduce(es, %{}, fn {v1, v1_out}, acc ->
-      Enum.reduce(v1_out, acc, fn v2, acc2 ->
-        case Map.get(acc2, v2) do
-          nil ->
-            Map.put(acc2, v2, MapSet.new([v1]))
-          v2_out ->
-            Map.put(acc2, v2, MapSet.put(v2_out, v1))
-        end
+  def transpose(%__MODULE__{edges: es, edges_meta: es_meta} = g) do
+    es2 =
+      es
+      |> Enum.reduce(%{}, fn {v1, v1_out}, acc ->
+        Enum.reduce(v1_out, acc, fn v2, acc2 ->
+          case Map.get(acc2, v2) do
+            nil ->
+              Map.put(acc2, v2, MapSet.new([v1]))
+            v2_out ->
+              Map.put(acc2, v2, MapSet.put(v2_out, v1))
+          end
+        end)
       end)
-    end)
-    %__MODULE__{g | edges: es2}
+    es_meta2 =
+      es_meta
+      |> Enum.reduce(%{}, fn {{v1, v2}, meta}, acc -> Map.put(acc, {v2, v1}, meta) end)
+
+    %__MODULE__{g | edges: es2, edges_meta: es_meta2}
   end
 
   @doc """
@@ -589,7 +650,7 @@ defmodule Graph do
 
   @doc """
   Walks the graph by starting with a depth-first traversal, the walk function receives
-  the current vertex, it's out-neighbors, it's in-neighbors, and the accumulator.
+  the current vertex, it's out-neighbors and in-neighbors (as lists of Edge structs), and the accumulator.
   You can return one of the following to control the walk:
 
   - `{:next, acc}`, continues the depth-first traversal, passing along the accumulator
@@ -710,28 +771,24 @@ defmodule Graph do
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
-  def subgraph(%__MODULE__{edges: edges, vertices: vertices} = g, vs) do
-    allowed = vs |> Enum.map(&Map.get(vertices, &1)) |> Enum.reject(&is_nil/1) |> MapSet.new
-    vs
-    |> Enum.reduce(new(), fn v, sg ->
-      case Map.get(vertices, v) do
-        nil ->
-          sg
-        v_id ->
-          v_edges = edges |> Map.get(v_id, MapSet.new) |> MapSet.intersection(allowed) |> MapSet.to_list
-          add_edges(v_edges, v, g, sg, MapSet.new([v_id]), allowed)
-      end
-    end)
-  end
+  def subgraph(%__MODULE__{edges: edges, edges_meta: es_meta, vertices: vertices, ids: ids}, vs) do
+    allowed =
+      vs
+      |> Enum.map(&Map.get(vertices, &1))
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new
 
-  defp add_edges([], _v, _g, sg, _visited, _allowed), do: sg
-  defp add_edges([v2_id|vs], v1, %__MODULE__{ids: ids, edges: es} = g, sg, visited, allowed) do
-    if MapSet.member?(visited, v2_id) do
-      add_edges(vs, v1, g, sg, visited, allowed)
-    else
-      v2 = Map.get(ids, v2_id)
-      v2_edges = es |> Map.get(v2_id, MapSet.new) |> MapSet.intersection(allowed) |> MapSet.to_list
-      add_edges(v2_edges, v2, g, add_edge(sg, v1, v2), MapSet.put(visited, v2_id), allowed)
-    end
+    Enum.reduce(allowed, Graph.new, fn v_id, sg ->
+      v = Map.get(ids, v_id)
+      sg = Graph.add_vertex(sg, v)
+      edges
+      |> Map.get(v_id, MapSet.new)
+      |> MapSet.intersection(allowed)
+      |> Enum.reduce(sg, fn v2_id, sg ->
+        v2 = Map.get(ids, v2_id)
+        meta = Map.get(es_meta, {v_id, v2_id})
+        Graph.add_edge(sg, v, v2, meta)
+      end)
+    end)
   end
 end

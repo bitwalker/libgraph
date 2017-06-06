@@ -146,7 +146,7 @@ defmodule Graph.Impl do
   end
   defp posttraverse([], _g, visited, acc), do: {visited, acc}
 
-  defp in_neighbors(%Graph{edges: edges}, v, vs \\ []) do
+  def in_neighbors(%Graph{edges: edges}, v, vs \\ []) do
     Enum.reduce(edges, vs, fn {v1, out_edges}, acc ->
       if MapSet.member?(out_edges, v) do
         [v1|acc]
@@ -156,7 +156,7 @@ defmodule Graph.Impl do
     end)
   end
 
-  defp out_neighbors(%Graph{edges: edges}, v, vs \\ []) do
+  def out_neighbors(%Graph{edges: edges}, v, vs \\ []) do
     edges
     |> Map.get(v, MapSet.new)
     |> MapSet.to_list
