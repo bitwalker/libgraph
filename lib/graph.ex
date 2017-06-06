@@ -197,6 +197,30 @@ defmodule Graph do
   end
 
   @doc """
+  Replaces `vertex` with `new_vertex` in the graph.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b]) |> Graph.add_edge(:a, :b)
+      ...> [:a, :b] = Graph.vertices(g)
+      ...> g = Graph.replace_vertex(g, :a, :c)
+      ...> [:b, :c] = Graph.vertices(g)
+      ...> Graph.edges(g)
+      [{:c, :b}]
+  """
+  @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
+  def replace_vertex(%__MODULE__{vertices: vs, ids: ids} = g, vertex, new_vertex) do
+    case Map.get(vs, vertex) do
+      nil ->
+        {:error, :no_such_vertex}
+      id ->
+        vertices = vs |> Map.delete(vertex) |> Map.put(new_vertex, id)
+        ids = ids |> Map.put(id, new_vertex)
+        %__MODULE__{g | vertices: vertices, ids: ids}
+    end
+  end
+
+  @doc """
   Removes a vertex from the graph, as well as any edges which refer to that vertex. If the vertex does
   not exist in the graph, it is a no-op.
 
@@ -287,6 +311,41 @@ defmodule Graph do
   catch
     :throw, {:error, {:invalid_vertex_pair, _}} = err ->
       err
+  end
+
+  @doc """
+  Splits the edge between `v1` and `v2` by inserting a new vertex, `v3`, deleting
+  the edge between `v1` and `v2`, and inserting an edge from `v1` to `v3` and from
+  `v3` to `v2`.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :c]) |> Graph.add_edge(:a, :c)
+      ...> g = Graph.split_edge(g, :a, :c, :b)
+      ...> Graph.edges(g)
+      [{:a, :b}, {:b, :c}]
+  """
+  @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
+  def split_edge(%__MODULE__{vertices: vs, edges: es} = g, v1, v2, v3) do
+    case {Map.get(vs, v1), Map.get(vs, v2)} do
+      {v1_id, v2_id} when is_nil(v1_id) or is_nil(v2_id) ->
+        {:error, :no_such_edge}
+      {v1_id, v2_id} ->
+        case Map.get(es, v1_id) do
+          nil ->
+            {:error, :no_such_edge}
+          v1_out ->
+            if MapSet.member?(v1_out, v2_id) do
+              v1_out = MapSet.delete(v1_out, v2_id)
+              %__MODULE__{g | edges: Map.put(es, v1_id, v1_out)}
+              |> add_vertex(v3)
+              |> add_edge(v1, v3)
+              |> add_edge(v3, v2)
+            else
+              {:error, :no_such_edge}
+            end
+        end
+    end
   end
 
   @doc """
