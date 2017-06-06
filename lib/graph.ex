@@ -36,8 +36,6 @@ defmodule Graph do
 
   @opaque t :: %__MODULE__{}
   @type vertex :: term
-  @type edge :: {vertex, vertex}
-
   @doc """
   Creates a new graph.
   """
@@ -49,7 +47,7 @@ defmodule Graph do
   @doc """
   Returns a map of summary information about this graph.
   """
-  @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer, memory: non_neg_integer}
+  @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
   def info(%__MODULE__{edges: es, vertices: vs} = g) do
     %{num_edges: es |> Enum.map(&MapSet.size(elem(&1, 1))) |> Enum.sum,
       num_vertices: map_size(vs),
@@ -168,7 +166,7 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :c}, %Graph.Edge{v1: :b, v2: :c}]
 
   """
-  @spec edges(t) :: [edge]
+  @spec edges(t) :: [Edge.t]
   def edges(%__MODULE__{edges: edges, edges_meta: edges_meta, ids: ids}) do
     edges
     |> Enum.flat_map(fn {source_id, out_neighbors} ->
@@ -383,7 +381,7 @@ defmodule Graph do
       iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
       {:error, {:invalid_edge, :a}}
   """
-  @spec add_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_edge, term}}
+  @spec add_edges(t, [Edge.t]) :: t | {:error, {:invalid_edge, term}}
   def add_edges(%__MODULE__{} = g, es) when is_list(es) do
     Enum.reduce(es, g, fn
       %Edge{} = edge, acc ->
