@@ -5,11 +5,18 @@ alias Graph.Bench.Generators
 g = Generators.dag(10_000)
 dg = Generators.libgraph_to_digraph(g)
 
-Benchee.run(%{time: 10}, %{
-      "digraph (topsort)" => fn ->
+opts = %{
+  time: 10,
+  inputs: %{
+    "10k vertices, #{map_size(g.out_edges)} edges" => {g, dg}
+  }
+}
+
+Benchee.run(opts, %{
+      "digraph (topsort)" => fn {_, dg}->
         :digraph_utils.topsort(dg)
       end,
-      "libgraph (topsort)" => fn ->
+      "libgraph (topsort)" => fn {g, _} ->
         Graph.topsort(g)
       end
 })

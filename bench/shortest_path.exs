@@ -1,16 +1,28 @@
-dg = :digraph.new
-for i <- 1..10_000, do: :digraph.add_vertex(dg, i)
-for i <- 10_000..2, j = div(i, 2), do: :digraph.add_edge(dg, i, j)
+Code.require_file(Path.join([__DIR__, "support", "generators.ex"]))
 
-g = Graph.new
-g = Enum.reduce(1..10_000, g, fn i, g -> Graph.add_vertex(g, i) end)
-g = Enum.reduce(10_000..2, g, fn i, g -> Graph.add_edge(g, i, div(i, 2)) end)
+alias Graph.Bench.Generators
 
-Benchee.run(%{time: 10}, %{
-      "digraph (get_short_path)" => fn ->
-              :digraph.get_short_path(dg, 10_000, 1)
-            end,
-      "libgraph (get_shortest_path)" => fn ->
-        Graph.get_shortest_path(g, 10_000, 1)
-      end
+g = Generators.dag(10_000)
+dg = Generators.libgraph_to_digraph(g)
+
+g2 = Generators.biased_dag(10_000)
+dg2 = Generators.libgraph_to_digraph(g2)
+
+opts = %{time: 10, inputs: %{"unbiased" => {g, dg}, "biased" => {g2, dg2}}}
+
+Benchee.run(opts, %{
+      "digraph (get_short_path)" => fn {_, dg} ->
+        length(:digraph.get_short_path(dg, 1, 10_000)) != 0
+      end,
+      "libgraph (dijkstra)" => fn {g, _} ->
+        length(Graph.dijkstra(g, 1, 10_000)) != 0
+      end,
+      "libgraph (a_star)" => fn {g, _} ->
+        length(Graph.a_star(g, 1, 10_000, fn v ->
+              case rem(v, 2) do
+                0 -> 0
+                _ -> 10_000+v
+              end
+            end)) != 0
+      end,
 })
