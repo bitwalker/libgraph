@@ -28,19 +28,22 @@ defmodule Graph.Impl do
     arborescence_root(g) != nil
   end
 
-  def arborescence_root(%Graph{out_edges: oe, ids: ids} = g) when map_size(oe) == (map_size(ids) - 1) do
-    [root] = List.foldl(ids, [], fn v, acc ->
-      case length(in_neighbors(g, v)) do
-        1 -> acc
-        0 when acc == [] -> [v]
-      end
-    end)
-    root
+  def arborescence_root(%Graph{out_edges: oe, ids: ids} = g) do
+    if Graph.num_edges(g) == (Graph.num_vertices(g) - 1) do
+      [root] = Enum.reduce(ids, [], fn {v_id, v}, acc ->
+        case length(in_neighbors(g, v_id)) do
+          1 -> acc
+          0 when acc == [] -> [v]
+        end
+      end)
+      root
+    else
+      nil
+    end
   catch
-    _, _ ->
+    _type, _err ->
       nil
   end
-  def arborescence_root(_g), do: nil
 
   def is_acyclic?(%Graph{} = g) do
     loop_vertices_w_ids(g) == [] and topsort(g) != false

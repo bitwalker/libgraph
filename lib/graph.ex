@@ -63,11 +63,26 @@ defmodule Graph do
   Returns a map of summary information about this graph.
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
-  def info(%__MODULE__{out_edges: es, vertices: vs} = g) do
-    num_edges = Enum.reduce(es, 0, fn {_, out}, sum -> sum + MapSet.size(out) end)
-    %{num_edges: num_edges,
-      num_vertices: map_size(vs),
+  def info(%__MODULE__{} = g) do
+    %{num_edges: num_edges(g),
+      num_vertices: num_vertices(g),
       size_in_bytes: :erlang.external_size(g)}
+  end
+
+  @doc """
+  Returns the number of edges in the graph
+  """
+  @spec num_edges(t) :: non_neg_integer
+  def num_edges(%__MODULE__{out_edges: es}) do
+    Enum.reduce(es, 0, fn {_, out}, sum -> sum + MapSet.size(out) end)
+  end
+
+  @doc """
+  Returns the number of vertices in the graph
+  """
+  @spec num_vertices(t) :: non_neg_integer
+  def num_vertices(%__MODULE__{vertices: vs}) do
+    map_size(vs)
   end
 
   @doc """
