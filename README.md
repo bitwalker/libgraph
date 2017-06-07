@@ -33,7 +33,7 @@ by adding `libgraph` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:libgraph, "~> 0.1"}]
+  [{:libgraph, "~> 0.3"}]
 end
 ```
 
@@ -41,9 +41,7 @@ end
 
 The following are items I plan to implement soon - they are not in any particular order.
 
-- [x] Graph reducer, allowing you to manipulate the graph as you walk it
-- [x] Graph iterators, allow you to walk a graph via BFS/DFS, applying a function as you go
-- [x] Implement weighted edges, and a corresponding shortest path implementation
+- [ ] Support for undirected graphs
 
 ## License
 
