@@ -36,10 +36,24 @@ defmodule GraphTest do
 
   test "is_arborescence?" do
     dg = build_basic_tree_digraph()
-    assert {:yes, _} = :digraph_utils.arborescence_root(dg)
+    assert :digraph_utils.is_arborescence(dg)
 
     g = build_basic_tree_graph()
     assert Graph.is_arborescence?(g)
+  end
+
+  test "arborescence_root" do
+    dg = build_basic_tree_digraph()
+    assert {:yes, root} = :digraph_utils.arborescence_root(dg)
+
+    g = build_basic_tree_graph()
+    assert ^root = Graph.arborescence_root(g)
+  end
+
+  test "is_subgraph?" do
+    g = build_basic_tree_graph()
+    sg = Graph.subgraph(g, [:a, :b, :c])
+    assert Graph.is_subgraph?(sg, g)
   end
 
   test "topsort" do

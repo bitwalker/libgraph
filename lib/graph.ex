@@ -108,6 +108,12 @@ defmodule Graph do
   defdelegate is_arborescence?(g), to: Graph.Impl
 
   @doc """
+  Returns the root vertex of the arborescence, if one exists, otherwise nil.
+  """
+  @spec arborescence_root(t) :: vertex | nil
+  defdelegate arborescence_root(g), to: Graph.Impl
+
+  @doc """
   Returns true if and only if the graph `g` is acyclic.
   """
   @spec is_acyclic?(t) :: boolean
@@ -279,14 +285,13 @@ defmodule Graph do
       [%Graph.Edge{v1: :c, v2: :b}]
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
-  def replace_vertex(%__MODULE__{vertices: vs, ids: ids} = g, vertex, new_vertex) do
-    case Map.get(vs, vertex) do
-      nil ->
-        {:error, :no_such_vertex}
-      id ->
-        vertices = vs |> Map.delete(vertex) |> Map.put(new_vertex, id)
-        ids = ids |> Map.put(id, new_vertex)
-        %__MODULE__{g | vertices: vertices, ids: ids}
+  def replace_vertex(%__MODULE__{vertices: vs, ids: ids} = g, v, rv) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+           vs  <- Map.put(Map.delete(vs, v), rv, v_id),
+           ids <- Map.put(ids, v_id, rv) do
+      %__MODULE__{g | vertices: vs, ids: ids}
+    else
+      _ -> {:error, :no_such_vertex}
     end
   end
 
@@ -305,30 +310,22 @@ defmodule Graph do
       []
   """
   @spec delete_vertex(t, vertex) :: t
-  def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges_meta: es_meta, vertices: vs, ids: ids} = g, vertex) do
-    case Map.get(vs, vertex) do
-      nil ->
-        g
-      v_id ->
-        oe2 =
-          oe
-          |> Map.delete(v_id)
-          |> Enum.reduce(%{}, fn {source_id, neighbors}, acc ->
-            Map.put(acc, source_id, MapSet.delete(neighbors, v_id))
-          end)
-        ie2 =
-          ie
-          |> Map.delete(v_id)
-        edges_meta =
-          es_meta
-          |> Enum.reject(fn {{v1_id, v2_id}, _} -> v_id == v1_id || v_id == v2_id end)
-          |> Enum.into(%{})
-        %__MODULE__{g |
-                    vertices: Map.delete(vs, vertex),
-                    ids: Map.delete(ids, v_id),
-                    in_edges: ie2,
-                    out_edges: oe2,
-                    edges_meta: edges_meta}
+  def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges_meta: em, vertices: vs, ids: ids} = g, v) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+           oe <- Map.delete(oe, v_id),
+           ie <- Map.delete(ie, v_id),
+           vs <- Map.delete(vs, v),
+           ids <- Map.delete(ids, v_id) do
+      oe = for {id, ns} <- oe, do: {id, MapSet.delete(ns, v_id)}, into: %{}
+      em = for {{id1, id2}, _} = e <- em, v_id != id1 && v_id != id2, do: e, into: %{}
+      %__MODULE__{g |
+                  vertices: vs,
+                  ids: ids,
+                  out_edges: oe,
+                  in_edges: ie,
+                  edges_meta: em}
+    else
+      _ -> g
     end
   end
 
@@ -452,30 +449,39 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, weight: 2}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
-  def split_edge(%__MODULE__{vertices: vs, in_edges: ie, out_edges: oe, edges_meta: es_meta} = g, v1, v2, v3) do
-    case {Map.get(vs, v1), Map.get(vs, v2)} do
-      {v1_id, v2_id} when is_nil(v1_id) or is_nil(v2_id) ->
-        {:error, :no_such_edge}
-      {v1_id, v2_id} ->
-        case {Map.get(ie, v2_id), Map.get(oe, v1_id)} do
-          {v2_in, v1_out} when is_nil(v2_in) or is_nil(v1_out) ->
-            {:error, :no_such_edge}
-          {v2_in, v1_out} ->
-            if MapSet.member?(v1_out, v2_id) do
-              meta = Map.get(es_meta, {v1_id, v2_id}, [])
-              v1_out = MapSet.delete(v1_out, v2_id)
-              v2_in = MapSet.delete(v2_in, v1_id)
-              %__MODULE__{g |
+  def split_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: em} = g, v1, v2, v3) do
+    with {:ok, v1_id}  <- find_vertex_id(g, v1),
+         {:ok, v2_id}  <- find_vertex_id(g, v2),
+         {:ok, v1_out} <- find_out_edges(g, v1_id),
+         {:ok, v2_in}  <- find_in_edges(g, v2_id),
+          true   <- MapSet.member?(v1_out, v2_id),
+          meta   <- Map.get(em, {v1_id, v2_id}),
+          v1_out <- MapSet.delete(v1_out, v2_id),
+          v2_in  <- MapSet.delete(v2_in, v1_id) do
+      %__MODULE__{g |
                   in_edges: Map.put(ie, v2_id, v2_in),
-                  out_edges: Map.put(oe, v1_id, v1_out)
-              }
-              |> add_vertex(v3)
-              |> add_edge(v1, v3, meta)
-              |> add_edge(v3, v2, meta)
-            else
-              {:error, :no_such_edge}
-            end
-        end
+                  out_edges: Map.put(oe, v1_id, v1_out)}
+      |> add_vertex(v3)
+      |> add_edge(v1, v3, meta)
+      |> add_edge(v3, v2, meta)
+    else
+      _ -> {:error, :no_such_edge}
+    end
+  end
+
+  @spec update_edge(t, vertex, vertex, Edge.edge_opts) :: t | {:error, :no_such_edge}
+  def update_edge(%__MODULE__{edges_meta: em} = g, v1, v2, opts) when is_list(opts) do
+    with {:ok, v1_id} <- find_vertex_id(g, v1),
+         {:ok, v2_id} <- find_vertex_id(g, v2),
+         {opts, _} <- Keyword.split(opts, [:weight, :label]) do
+      case Map.get(em, {v1_id, v2_id}) do
+        nil ->
+          g
+        meta when is_list(meta) ->
+          %__MODULE__{g | edges_meta: Map.put(em, {v1_id, v2_id}, Keyword.merge(meta, opts))}
+      end
+    else
+      _ -> g
     end
   end
 
@@ -490,29 +496,20 @@ defmodule Graph do
       ...> Graph.edges(g)
       []
   """
-  def delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: es_meta, vertices: vs} = g, a, b) do
-    case Map.get(vs, a) do
-      nil ->
-        g
-      a_id ->
-        case Map.get(vs, b) do
-          nil ->
-            g
-          b_id ->
-            case {Map.get(oe, a_id), Map.get(ie, b_id)} do
-              {out_n, in_n} when is_nil(out_n) or is_nil(in_n) ->
-                g
-              {out_neighbors, in_neighbors} ->
-                out_neighbors = MapSet.delete(out_neighbors, b_id)
-                in_neighbors = MapSet.delete(in_neighbors, a_id)
-                es_meta_new = Map.delete(es_meta, {a_id, b_id})
-                %__MODULE__{g |
-                  in_edges: Map.put(ie, b_id, in_neighbors),
-                  out_edges: Map.put(oe, a_id, out_neighbors),
-                  edges_meta: es_meta_new
-                }
-            end
-        end
+  def delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: meta} = g, a, b) do
+    with {:ok, a_id}  <- find_vertex_id(g, a),
+         {:ok, b_id}  <- find_vertex_id(g, b),
+         {:ok, a_out} <- find_out_edges(g, a_id),
+         {:ok, b_in}  <- find_in_edges(g, b_id) do
+      a_out = MapSet.delete(a_out, b_id)
+      b_in  = MapSet.delete(b_in, a_id)
+      meta  = Map.delete(meta, {a_id, b_id})
+      %__MODULE__{g |
+                  in_edges: Map.put(ie, b_id, b_in),
+                  out_edges: Map.put(oe, a_id, a_out),
+                  edges_meta: meta}
+    else
+      _ -> g
     end
   end
 
@@ -735,15 +732,12 @@ defmodule Graph do
 
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.
   """
-  def in_degree(%__MODULE__{vertices: vs, in_edges: ie}, v) do
-    case Map.get(vs, v) do
-      nil ->
-        0
-      v_id ->
-        case Map.get(ie, v_id) do
-          nil -> 0
-          v_in -> MapSet.size(v_in)
-        end
+  def in_degree(%__MODULE__{} = g, v) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+         {:ok, v_in} <- find_in_edges(g, v_id) do
+      MapSet.size(v_in)
+    else
+      _ -> 0
     end
   end
 
@@ -753,15 +747,12 @@ defmodule Graph do
   The *out-degree* of a vertex is the number of edges directed outbound from that vertex.
   """
   @spec out_degree(t, vertex) :: non_neg_integer
-  def out_degree(%__MODULE__{vertices: vs, out_edges: oe}, v) do
-    case Map.get(vs, v) do
-      nil ->
-        0
-      v_id ->
-        case Map.get(oe, v_id) do
-          nil -> 0
-          v_out -> MapSet.size(v_out)
-        end
+  def out_degree(%__MODULE__{} = g, v) do
+    with {:ok, v_id}  <- find_vertex_id(g, v),
+         {:ok, v_out} <- find_out_edges(g, v_id) do
+      MapSet.size(v_out)
+    else
+      _ -> 0
     end
   end
 
@@ -769,15 +760,12 @@ defmodule Graph do
   Returns a list of vertices which all have edges coming in to the given vertex `v`.
   """
   @spec in_neighbors(t, vertex) :: [vertex]
-  def in_neighbors(%Graph{vertices: vertices, ids: ids, in_edges: ie}, v) do
-    case Map.get(vertices, v) do
-      nil ->
-        []
-      v_id ->
-        case Map.get(ie, v_id) do
-          nil -> []
-          v_in -> Enum.map(v_in, &Map.get(ids, &1))
-        end
+  def in_neighbors(%Graph{ids: ids} = g, v) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+         {:ok, v_in} <- find_in_edges(g, v_id) do
+      Enum.map(v_in, &Map.get(ids, &1))
+    else
+      _ -> []
     end
   end
 
@@ -785,21 +773,16 @@ defmodule Graph do
   Returns a list of `Graph.Edge` structs representing the in edges to vertex `v`.
   """
   @spec in_edges(t, vertex) :: Edge.t
-  def in_edges(%__MODULE__{vertices: vertices, ids: ids, in_edges: ie, edges_meta: es_meta}, v) do
-    case Map.get(vertices, v) do
-      nil ->
-        []
-      v_id ->
-        case Map.get(ie, v_id) do
-          nil ->
-            []
-          v_in ->
-            Enum.map(v_in, fn id ->
-              v2 = Map.get(ids, id)
-              meta = Map.get(es_meta, {id, v_id}, [])
-              Edge.new(v2, v, meta)
-            end)
-        end
+  def in_edges(%__MODULE__{ids: ids, edges_meta: em} = g, v) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+         {:ok, v_in} <- find_in_edges(g, v_id) do
+      Enum.map(v_in, fn id ->
+        v2 = Map.get(ids, id)
+        meta = Map.get(em, {id, v_id}, [])
+        Edge.new(v2, v, meta)
+      end)
+    else
+      _ -> []
     end
   end
 
@@ -807,15 +790,12 @@ defmodule Graph do
   Returns a list of vertices which the given vertex `v` has edges going to.
   """
   @spec out_neighbors(t, vertex) :: [vertex]
-  def out_neighbors(%__MODULE__{vertices: vertices, ids: ids, out_edges: oe}, v) do
-    case Map.get(vertices, v) do
-      nil ->
-        []
-      v_id ->
-        case Map.get(oe, v_id) do
-          nil -> []
-          v_out -> Enum.map(v_out, &Map.get(ids, &1))
-        end
+  def out_neighbors(%__MODULE__{ids: ids} = g, v) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+         {:ok, v_out} <- find_out_edges(g, v_id) do
+      Enum.map(v_out, &Map.get(ids, &1))
+    else
+      _ -> []
     end
   end
 
@@ -823,21 +803,16 @@ defmodule Graph do
   Returns a list of `Graph.Edge` structs representing the out edges from vertex `v`.
   """
   @spec out_edges(t, vertex) :: Edge.t
-  def out_edges(%__MODULE__{vertices: vs, ids: ids, out_edges: oe, edges_meta: es_meta}, v) do
-    case Map.get(vs, v) do
-      nil ->
-        []
-      v_id ->
-        case Map.get(oe, v_id) do
-          nil ->
-            []
-          v_out ->
-            Enum.map(v_out, fn id ->
-              v2 = Map.get(ids, id)
-              meta = Map.get(es_meta, {v_id, id}, [])
-              Edge.new(v, v2, meta)
-            end)
-        end
+  def out_edges(%__MODULE__{ids: ids, edges_meta: es_meta} = g, v) do
+    with {:ok, v_id} <- find_vertex_id(g, v),
+         {:ok, v_out} <- find_out_edges(g, v_id) do
+      Enum.map(v_out, fn id ->
+        v2 = Map.get(ids, id)
+        meta = Map.get(es_meta, {v_id, id}, [])
+        Edge.new(v, v2, meta)
+      end)
+    else
+      _ -> []
     end
   end
 
@@ -866,5 +841,28 @@ defmodule Graph do
         Graph.add_edge(sg, v, v2, meta)
       end)
     end)
+  end
+
+  ## Private
+
+  defp find_vertex_id(%__MODULE__{vertices: vs}, v) do
+    case Map.get(vs, v) do
+      nil  -> nil
+      v_id -> {:ok, v_id}
+    end
+  end
+
+  defp find_out_edges(%__MODULE__{out_edges: oe}, v_id) do
+    case Map.get(oe, v_id) do
+      nil -> nil
+      v_out -> {:ok, v_out}
+    end
+  end
+
+  defp find_in_edges(%__MODULE__{in_edges: ie}, v_id) do
+    case Map.get(ie, v_id) do
+      nil -> nil
+      v_in -> {:ok, v_in}
+    end
   end
 end
