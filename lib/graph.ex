@@ -188,26 +188,59 @@ defmodule Graph do
   end
 
   @doc """
-  Gets the shortest path between `a` and `b`. If there are multiple paths of the same length,
-  where all are "shortest", this implementation simply takes the first one encountered.
+  See `dijkstra/1`.
+  """
+  @spec get_shortest_path(t, vertex, vertex) :: [vertex]
+  defdelegate get_shortest_path(g, a, b), to: Graph.Pathing, as: :dijkstra
 
-  The algorithm used here is a breadth-first search, which stops evaluation
-  as soon as the shortest path to `b` is found. It follows very closely the implementation of
-  `get_short_path` from `:digraph`, the only difference being in how some lookups, etc. are performed.
+  @doc """
+  Gets the shortest path between `a` and `b`.
+
+  As indicated by the name, this uses Dijkstra's algorithm for locating the shortest path, which
+  means that edge weights are taken into account when determining which vertices to search next. By
+  default, all edges have a weight of 1, so vertices are inspected at random; which causes this algorithm
+  to perform a naive depth-first search of the graph until a path is found. If your edges are weighted however,
+  this will allow the algorithm to more intelligently navigate the graph.
 
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:b, :d}])
-      ...> Graph.get_shortest_path(g, :a, :d)
+      ...> Graph.dijkstra(g, :a, :d)
       [:a, :b, :d]
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
       ...> g = Graph.add_edges(g, [{:a, :c}, {:b, :c}, {:b, :d}])
-      ...> Graph.get_shortest_path(g, :a, :d)
+      ...> Graph.dijkstra(g, :a, :d)
       nil
   """
-  @spec get_shortest_path(t, vertex, vertex) :: [vertex]
-  defdelegate get_shortest_path(g, a, b), to: Graph.Pathing, as: :shortest_path
+  @spec dijkstra(t, vertex, vertex) :: [vertex]
+  defdelegate dijkstra(g, a, b), to: Graph.Pathing
+
+  @doc """
+  Gets the shortest path between `a` and `b`.
+
+  The A* algorithm is very much like Dijkstra's algorithm, except in addition to edge weights, A*
+  also considers a heuristic function for determining the lower bound of the cost to go from vertex
+  `v` to `b`. The lower bound *must* be less than the cost of the shortest path from `v` to `b`, otherwise
+  it will do more harm than good. Dijkstra's algorithm can be reframed as A* where `lower_bound(v)` is always 0.
+
+  This function puts the heuristics in your hands, so you must provide the heuristic function, which should take
+  a single parameter, `v`, which is the vertex being currently examined. Your heuristic should then determine what the
+  lower bound for the cost to reach `b` from `v` is, and return that value.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:b, :d}])
+      ...> Graph.a_star(g, :a, :d, fn _ -> 0 end)
+      [:a, :b, :d]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :c}, {:b, :c}, {:b, :d}])
+      ...> Graph.a_star(g, :a, :d, fn _ -> 0 end)
+      nil
+  """
+  @spec a_star(t, vertex, vertex, (vertex, vertex -> integer)) :: [vertex]
+  defdelegate a_star(g, a, b, hfun), to: Graph.Pathing
 
   @doc """
   Builds a list of paths between vertex `a` and vertex `b`.

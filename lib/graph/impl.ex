@@ -1,6 +1,20 @@
 defmodule Graph.Impl do
   @moduledoc false
-  @compile {:inline, find_vertex_id: 2, find_out_edges: 2, find_in_edges: 2}
+  @compile {:inline, [find_vertex_id: 2,
+                      find_out_edges: 2,
+                      find_in_edges: 2,
+                      in_neighbors: 2,
+                      in_neighbors: 3,
+                      out_neighbors: 2,
+                      out_neighbors: 3,
+                      edge_weight: 3]}
+
+  def edge_weight(%Graph{edges_meta: em}, a, b) do
+    case Map.get(em, {a, b}) do
+      %{weight: w} -> w
+      _ -> 0
+    end
+  end
 
   def find_vertex_id(%Graph{vertices: vs}, v) do
     case Map.get(vs, v) do
@@ -110,6 +124,38 @@ defmodule Graph.Impl do
     for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
   end
 
+  def in_neighbors(%Graph{} = g, v, []) do
+    in_neighbors(g, v)
+  end
+  def in_neighbors(%Graph{in_edges: ie}, v, vs) do
+    case Map.get(ie, v) do
+      nil -> vs
+      v_in -> MapSet.to_list(v_in) ++ vs
+    end
+  end
+  def in_neighbors(%Graph{in_edges: ie}, v) do
+    case Map.get(ie, v) do
+      nil -> []
+      v_in -> MapSet.to_list(v_in)
+    end
+  end
+
+  def out_neighbors(%Graph{} = g, v, []) do
+    out_neighbors(g, v)
+  end
+  def out_neighbors(%Graph{out_edges: oe}, v, vs) do
+    case Map.get(oe, v) do
+      nil -> vs
+      v_out -> MapSet.to_list(v_out) ++ vs
+    end
+  end
+  def out_neighbors(%Graph{out_edges: oe}, v) do
+    case Map.get(oe, v) do
+      nil -> []
+      v_out -> MapSet.to_list(v_out)
+    end
+  end
+
   ## Private
 
   defp is_reflexive_vertex(g, v) do
@@ -157,7 +203,7 @@ defmodule Graph.Impl do
     :lists.append(forest(g, &out_neighbors/3))
   end
 
-  def reverse_postorder(%Graph{ids: ids} = g) do
+  defp reverse_postorder(%Graph{ids: ids} = g) do
     {_, l} = posttraverse(Map.keys(ids), g, MapSet.new, [])
     l
   end
@@ -173,38 +219,6 @@ defmodule Graph.Impl do
     posttraverse(vs, g, visited, acc)
   end
   defp posttraverse([], _g, visited, acc), do: {visited, acc}
-
-  def in_neighbors(%Graph{} = g, v, []) do
-    in_neighbors(g, v)
-  end
-  def in_neighbors(%Graph{in_edges: ie}, v, vs) do
-    case Map.get(ie, v) do
-      nil -> vs
-      v_in -> MapSet.to_list(v_in) ++ vs
-    end
-  end
-  def in_neighbors(%Graph{in_edges: ie}, v) do
-    case Map.get(ie, v) do
-      nil -> []
-      v_in -> MapSet.to_list(v_in)
-    end
-  end
-
-  def out_neighbors(%Graph{} = g, v, []) do
-    out_neighbors(g, v)
-  end
-  def out_neighbors(%Graph{out_edges: oe}, v, vs) do
-    case Map.get(oe, v) do
-      nil -> vs
-      v_out -> MapSet.to_list(v_out) ++ vs
-    end
-  end
-  def out_neighbors(%Graph{out_edges: oe}, v) do
-    case Map.get(oe, v) do
-      nil -> []
-      v_out -> MapSet.to_list(v_out)
-    end
-  end
 
   defp inout(g, v, vs) do
     in_neighbors(g, v, out_neighbors(g, v, vs))

@@ -2,20 +2,44 @@ defmodule Graph.Pathing do
   @moduledoc """
   This module contains implementation code for path finding algorithms used by `libgraph`.
   """
-  import Graph.Impl, only: [find_vertex_id: 2, find_out_edges: 2]
+  import Graph.Impl, only: [find_vertex_id: 2, find_out_edges: 2, edge_weight: 3]
 
   @doc """
   Finds the shortest path between `a` and `b` as a list of vertices.
   Returns `nil` if no path can be found.
+
+  The shortest path is calculated here by using a cost function to choose
+  which path to explore next. The cost function in Dijkstra's algorithm is
+  `weight(E(A, B))+lower_bound(E(A, B))` where `lower_bound(E(A, B))` is always 0.
   """
-  def shortest_path(%Graph{ids: ids} = g, a, b) do
+  def dijkstra(%Graph{} = g, a, b) do
+    a_star(g, a, b, fn _v -> 0 end)
+  end
+
+  @doc """
+  Finds the shortest path between `a` and `b` as a list of vertices.
+  Returns `nil` if no path can be found.
+
+  This implementation takes a heuristic function which allows you to
+  calculate the lower bound cost of a given vertex `v`. The algorithm
+  then uses that lower bound function to determine which path to explore
+  next in the graph.
+
+  The `dijkstra` function is simply `a_star` where the heuristic function
+  always returns 0, and thus the next vertex is chosen based on the weight of
+  the edge between it and the current vertex.
+  """
+  def a_star(%Graph{ids: ids} = g, a, b, hfun) when is_function(hfun, 1) do
     with {:ok, a_id}  <- find_vertex_id(g, a),
          {:ok, b_id}  <- find_vertex_id(g, b),
          {:ok, a_out} <- find_out_edges(g, a_id) do
       tree = Graph.new |> Graph.add_vertex(a_id)
       q = :queue.new()
-      q = a_out |> MapSet.to_list |> List.foldl(q, fn id, q -> :queue.in({a_id, id}, q) end)
-      case do_shortpath(q, g, b_id, tree) do
+      q =
+        a_out
+        |> Enum.sort_by(fn id -> cost(g, a_id, id, hfun) end)
+        |> Enum.reduce(q, fn id, q -> :queue.in({a_id, id}, q) end)
+      case do_shortpath(q, g, b_id, tree, hfun) do
         nil ->
           nil
         path ->
@@ -48,21 +72,28 @@ defmodule Graph.Pathing do
 
   ## Private
 
-  defp do_shortpath(q, %Graph{out_edges: oe} = g, target_id, tree) do
+  defp cost(%Graph{ids: ids} = g, v1_id, v2_id, hfun) do
+    edge_weight(g, v1_id, v2_id) + hfun.(Map.get(ids, v2_id))
+  end
+
+  defp do_shortpath(q, %Graph{out_edges: oe} = g, target_id, tree, hfun) do
     case :queue.out(q) do
       {{:value, {v_id, ^target_id}}, _q1} ->
         follow_path(v_id, tree, [target_id])
       {{:value, {v1_id, v2_id}}, q1} ->
         if Map.has_key?(tree.vertices, v2_id) do
-          do_shortpath(q1, g, target_id, tree)
+          do_shortpath(q1, g, target_id, tree, hfun)
         else
           case Map.get(oe, v2_id) do
             nil ->
-              do_shortpath(q1, g, target_id, tree)
+              do_shortpath(q1, g, target_id, tree, hfun)
             v2_out ->
               tree = tree |> Graph.add_vertex(v2_id) |> Graph.add_edge(v2_id, v1_id)
-              q2 = v2_out |> MapSet.to_list |> List.foldl(q1, fn id, q -> :queue.in({v2_id, id}, q) end)
-              do_shortpath(q2, g, target_id, tree)
+              q2 =
+                v2_out
+                |> Enum.sort_by(fn id -> cost(g, v2_id, id, hfun) end)
+                |> Enum.reduce(q1, fn id, q -> :queue.in_r({v2_id, id}, q) end)
+              do_shortpath(q2, g, target_id, tree, hfun)
           end
         end
       {:empty, _} ->
