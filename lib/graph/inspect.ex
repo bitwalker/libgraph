@@ -6,7 +6,7 @@ defimpl Inspect, for: Graph do
   # however we should avoid doing so with larger graphs, as it will likely cause outrageous
   # memory consumption, not to mention be expensive to calculate, and the pretty form is not
   # very useful at that size anyway
-  def inspect(%Graph{vertices: vs, edges: es, ids: ids}, opts) when map_size(vs) < 100 do
+  def inspect(%Graph{vertices: vs, out_edges: es, ids: ids}, opts) when map_size(vs) < 100 do
     # The goal here is to strip out the ids map, convert the vertices map to a list of vertices
     # and convert the map of edges to their reified forms (i.e. the actual vertex term is used in place of ids)
     # we also want to respect the inspect options as much as possible, so we do this all the hard way by

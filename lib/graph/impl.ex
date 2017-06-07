@@ -28,7 +28,7 @@ defmodule Graph.Impl do
     arborescence_root(g) != nil
   end
 
-  def arborescence_root(%Graph{edges: es, ids: ids} = g) when map_size(es) == (map_size(ids) - 1) do
+  def arborescence_root(%Graph{out_edges: oe, ids: ids} = g) when map_size(oe) == (map_size(ids) - 1) do
     [root] = List.foldl(ids, [], fn v, acc ->
       case length(in_neighbors(g, v)) do
         1 -> acc
@@ -146,21 +146,36 @@ defmodule Graph.Impl do
   end
   defp posttraverse([], _g, visited, acc), do: {visited, acc}
 
-  def in_neighbors(%Graph{edges: edges}, v, vs \\ []) do
-    Enum.reduce(edges, vs, fn {v1, out_edges}, acc ->
-      if MapSet.member?(out_edges, v) do
-        [v1|acc]
-      else
-        acc
-      end
-    end)
+  def in_neighbors(%Graph{} = g, v, []) do
+    in_neighbors(g, v)
+  end
+  def in_neighbors(%Graph{in_edges: ie}, v, vs) do
+    case Map.get(ie, v) do
+      nil -> vs
+      v_in -> MapSet.to_list(v_in) ++ vs
+    end
+  end
+  def in_neighbors(%Graph{in_edges: ie}, v) do
+    case Map.get(ie, v) do
+      nil -> []
+      v_in -> MapSet.to_list(v_in)
+    end
   end
 
-  def out_neighbors(%Graph{edges: edges}, v, vs \\ []) do
-    edges
-    |> Map.get(v, MapSet.new)
-    |> MapSet.to_list
-    |> Enum.concat(vs)
+  def out_neighbors(%Graph{} = g, v, []) do
+    out_neighbors(g, v)
+  end
+  def out_neighbors(%Graph{out_edges: oe}, v, vs) do
+    case Map.get(oe, v) do
+      nil -> vs
+      v_out -> MapSet.to_list(v_out) ++ vs
+    end
+  end
+  def out_neighbors(%Graph{out_edges: oe}, v) do
+    case Map.get(oe, v) do
+      nil -> []
+      v_out -> MapSet.to_list(v_out)
+    end
   end
 
   defp inout(g, v, vs) do

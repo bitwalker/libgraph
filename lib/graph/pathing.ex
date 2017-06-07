@@ -7,7 +7,7 @@ defmodule Graph.Pathing do
   Finds the shortest path between `a` and `b` as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  def shortest_path(%Graph{edges: edges, vertices: vertices, ids: ids} = g, a, b) do
+  def shortest_path(%Graph{out_edges: oe, vertices: vertices, ids: ids} = g, a, b) do
     case Map.get(vertices, a) do
       nil ->
         nil
@@ -16,7 +16,7 @@ defmodule Graph.Pathing do
           nil ->
             nil
           b_id ->
-            case Map.get(edges, a_id) do
+            case Map.get(oe, a_id) do
               nil ->
                 nil
               a_out ->
@@ -38,7 +38,7 @@ defmodule Graph.Pathing do
   Finds all paths between `a` and `b`, each path as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  def all(%Graph{edges: edges, vertices: vertices, ids: ids} = g, a, b) do
+  def all(%Graph{out_edges: oe, vertices: vertices, ids: ids} = g, a, b) do
     case Map.get(vertices, a) do
       nil ->
         nil
@@ -47,8 +47,8 @@ defmodule Graph.Pathing do
           nil ->
             nil
           b_id ->
-            a_neighbors = Map.get(edges, a_id)
-            case build_paths(g, a_neighbors, b_id, [a_id], []) do
+            a_out_neighbors = Map.get(oe, a_id)
+            case build_paths(g, a_out_neighbors, b_id, [a_id], []) do
               nil -> nil
               paths ->
                 for path <- paths do
@@ -61,7 +61,7 @@ defmodule Graph.Pathing do
 
   ## Private
 
-  defp do_shortpath(q, %Graph{edges: edges} = g, target_id, tree) do
+  defp do_shortpath(q, %Graph{out_edges: oe} = g, target_id, tree) do
     case :queue.out(q) do
       {{:value, {v_id, ^target_id}}, _q1} ->
         follow_path(v_id, tree, [target_id])
@@ -69,7 +69,7 @@ defmodule Graph.Pathing do
         if Map.has_key?(tree.vertices, v2_id) do
           do_shortpath(q1, g, target_id, tree)
         else
-          case Map.get(edges, v2_id) do
+          case Map.get(oe, v2_id) do
             nil ->
               do_shortpath(q1, g, target_id, tree)
             v2_out ->
@@ -83,10 +83,10 @@ defmodule Graph.Pathing do
     end
   end
 
-  defp follow_path(v_id, %Graph{vertices: vertices, ids: ids, edges: edges} = tree, path) do
+  defp follow_path(v_id, %Graph{vertices: vertices, ids: ids, out_edges: oe} = tree, path) do
     path = [v_id | path]
     v_id_tree = Map.get(vertices, v_id)
-    case edges |> Map.get(v_id_tree, MapSet.new) |> MapSet.to_list do
+    case oe |> Map.get(v_id_tree, MapSet.new) |> MapSet.to_list do
       [] ->
         path
       [next_id] ->
@@ -106,8 +106,8 @@ defmodule Graph.Pathing do
   defp check_neighbors(_g, [], _target_id, _path, acc) do
     acc
   end
-  defp check_neighbors(%Graph{edges: es} = g, [next_neighbor_id|neighbors], target_id, path, acc) do
-    next_neighbors = Map.get(es, next_neighbor_id)
+  defp check_neighbors(%Graph{out_edges: oe} = g, [next_neighbor_id|neighbors], target_id, path, acc) do
+    next_neighbors = Map.get(oe, next_neighbor_id)
     case build_paths(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
       nil ->
         check_neighbors(g, neighbors, target_id, path, acc)

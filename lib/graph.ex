@@ -9,12 +9,26 @@ defmodule Graph do
   which will bring your node down. This graph implementation does not use ETS, so it can be used freely without
   concern for hitting this limit.
 
-  With regards to space requirements, vertices require 2N space, where N is the size of each vertex, as vertices are
-  mapped to indexes (integers), and we store both the vertex->id map and the inverted index (id->vertex) for efficient lookups
-  when querying the graph. Edges are stored as a map of `vertex_id -> MapSet(vertex_id)`, which is
-  the most compact representation we're allowed while still supporting efficient lookups on edges/neighbors. It is recommended
-  that you avoid stuffing large objects in the graph as vertices, and instead use a key which you can then use to reify a list
-  of objects you care about from ETS or some other source once you have results you care about.
+  The following properties should be kept in mind when planning space requirements:
+
+  - The graph structure stores vertices twice, as a map of vertex -> id (integer) and it's inverse index;
+  I have not yet been able to determine if shared references are used, or if the runtime forces copies, but you should be aware that
+  the graph may require up to `2((sizeof(V)*N)+(sizeof(integer)*N))`, where `N` is the number of vertices
+  - The graph also contains a map of all out edges and it's inverse, so each edge is
+  `2((3*sizeof(integer))+2)` bytes, which represents the 6 integers used, and the bytes needed
+  for the tuples used
+  - Additionally, each edge with metadata (weight/label) will incur the cost for a new list, a tuple (per option), and
+  the size of the term stored
+
+  You can obtain a "true" size in bytes, by calling `Graph.info/1`, which gets the size in bytes of the graph when encoded
+  using Erlang External Term Format.
+
+  The reason for the different internal structures, particularly the inverse indexes, is performance. In order to efficiently
+  perform queries on the graph, we need quick key-based lookup for both in-edges and out-edges for a vertex. Additionally, we
+  need to work with the smallest possible keys when storing edges, which means we need a map of vertices to their ids, and the inverse
+  of that lookup so that we can reify a collection of ids to their associated vertices/edges. Internally, we work strictly with ids
+  and only convert back to the actual vertex (or create an `Edge` struct) when we have the result set. This balances performance,
+  space requirements, and ease of maintenance.
 
   There are benchmarks provided with this library which compare it directly to `:digraph` for some common operations,
   and thus far, `libgraph` outperforms `:digraph` in all of them.
@@ -26,7 +40,8 @@ defmodule Graph do
   graphs concurrently, I think `libgraph` is the better choice - however if you either need the APIs of `:digraph` that I have
   not yet implemented, or do not have the same use case, I would stick to `:digraph` for now.
   """
-  defstruct edges: %{},
+  defstruct in_edges: %{},
+            out_edges: %{},
             edges_meta: %{},
             vertices: %{},
             ids: %{},
@@ -48,8 +63,9 @@ defmodule Graph do
   Returns a map of summary information about this graph.
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
-  def info(%__MODULE__{edges: es, vertices: vs} = g) do
-    %{num_edges: es |> Enum.map(&MapSet.size(elem(&1, 1))) |> Enum.sum,
+  def info(%__MODULE__{out_edges: es, vertices: vs} = g) do
+    num_edges = Enum.reduce(es, 0, fn {_, out}, sum -> sum + MapSet.size(out) end)
+    %{num_edges: num_edges,
       num_vertices: map_size(vs),
       size_in_bytes: :erlang.external_size(g)}
   end
@@ -58,8 +74,9 @@ defmodule Graph do
   Returns true if and only if the graph `g` is a tree.
   """
   @spec is_tree?(t) :: boolean
-  def is_tree?(%__MODULE__{} = g) do
-    %{num_edges: num_edges, num_vertices: num_vertices} = info(g)
+  def is_tree?(%__MODULE__{out_edges: es, vertices: vs} = g) do
+    num_edges = Enum.reduce(es, 0, fn {_, out}, sum -> sum + MapSet.size(out) end)
+    num_vertices = map_size(vs)
     if num_edges == (num_vertices - 1) do
       length(components(g)) == 1
     else
@@ -103,7 +120,7 @@ defmodule Graph do
       true
   """
   @spec is_subgraph?(t, t) :: boolean
-  def is_subgraph?(%__MODULE__{edges: es1, vertices: vs1} = g1, %__MODULE__{edges: es2, vertices: vs2} = g2) do
+  def is_subgraph?(%__MODULE__{out_edges: es1, vertices: vs1} = g1, %__MODULE__{out_edges: es2, vertices: vs2} = g2) do
     ids1 = g1.ids
     ids2 = g2.ids
     for {v, _} <- vs1 do
@@ -167,7 +184,7 @@ defmodule Graph do
 
   """
   @spec edges(t) :: [Edge.t]
-  def edges(%__MODULE__{edges: edges, edges_meta: edges_meta, ids: ids}) do
+  def edges(%__MODULE__{out_edges: edges, edges_meta: edges_meta, ids: ids}) do
     edges
     |> Enum.flat_map(fn {source_id, out_neighbors} ->
       source = Map.get(ids, source_id)
@@ -273,17 +290,20 @@ defmodule Graph do
       []
   """
   @spec delete_vertex(t, vertex) :: t
-  def delete_vertex(%__MODULE__{edges: es, edges_meta: es_meta, vertices: vs, ids: ids} = g, vertex) do
+  def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges_meta: es_meta, vertices: vs, ids: ids} = g, vertex) do
     case Map.get(vs, vertex) do
       nil ->
         g
       v_id ->
-        edges =
-          es
+        oe2 =
+          oe
           |> Map.delete(v_id)
-          |> Enum.reduce(%{}, fn {source_id, neighbors}, es2 ->
-            Map.put(es2, source_id, MapSet.delete(neighbors, v_id))
+          |> Enum.reduce(%{}, fn {source_id, neighbors}, acc ->
+            Map.put(acc, source_id, MapSet.delete(neighbors, v_id))
           end)
+        ie2 =
+          ie
+          |> Map.delete(v_id)
         edges_meta =
           es_meta
           |> Enum.reject(fn {{v1_id, v2_id}, _} -> v_id == v1_id || v_id == v2_id end)
@@ -291,7 +311,8 @@ defmodule Graph do
         %__MODULE__{g |
                     vertices: Map.delete(vs, vertex),
                     ids: Map.delete(ids, v_id),
-                    edges: edges,
+                    in_edges: ie2,
+                    out_edges: oe2,
                     edges_meta: edges_meta}
     end
   end
@@ -350,17 +371,24 @@ defmodule Graph do
   @spec add_edge(t, vertex, vertex) :: t
   @spec add_edge(t, vertex, vertex, Edge.edge_opts) :: t
   def add_edge(%__MODULE__{} = g, a, b, opts \\ []) do
-    %__MODULE__{edges: es, edges_meta: es_meta, vertices: vs} = g =
+    %__MODULE__{in_edges: ie, out_edges: oe, edges_meta: es_meta, vertices: vs} = g =
       g |> add_vertex(a) |> add_vertex(b)
 
     a_id = Map.get(vs, a)
     b_id = Map.get(vs, b)
-    neighbors = case Map.get(es, a_id) do
-                  nil -> MapSet.new([b_id])
-                  ms  -> MapSet.put(ms, b_id)
-                end
+    out_neighbors =
+      case Map.get(oe, a_id) do
+        nil -> MapSet.new([b_id])
+        ms  -> MapSet.put(ms, b_id)
+      end
+    in_neighbors =
+      case Map.get(ie, b_id) do
+        nil -> MapSet.new([a_id])
+        ms  -> MapSet.put(ms, a_id)
+      end
     %__MODULE__{g |
-      edges: Map.put(es, a_id, neighbors),
+      in_edges: Map.put(ie, b_id, in_neighbors),
+      out_edges: Map.put(oe, a_id, out_neighbors),
       edges_meta: Map.put(es_meta, {a_id, b_id}, opts)
     }
   end
@@ -409,19 +437,23 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, weight: 2}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
-  def split_edge(%__MODULE__{vertices: vs, edges: es, edges_meta: es_meta} = g, v1, v2, v3) do
+  def split_edge(%__MODULE__{vertices: vs, in_edges: ie, out_edges: oe, edges_meta: es_meta} = g, v1, v2, v3) do
     case {Map.get(vs, v1), Map.get(vs, v2)} do
       {v1_id, v2_id} when is_nil(v1_id) or is_nil(v2_id) ->
         {:error, :no_such_edge}
       {v1_id, v2_id} ->
-        case Map.get(es, v1_id) do
-          nil ->
+        case {Map.get(ie, v2_id), Map.get(oe, v1_id)} do
+          {v2_in, v1_out} when is_nil(v2_in) or is_nil(v1_out) ->
             {:error, :no_such_edge}
-          v1_out ->
+          {v2_in, v1_out} ->
             if MapSet.member?(v1_out, v2_id) do
               meta = Map.get(es_meta, {v1_id, v2_id}, [])
               v1_out = MapSet.delete(v1_out, v2_id)
-              %__MODULE__{g | edges: Map.put(es, v1_id, v1_out)}
+              v2_in = MapSet.delete(v2_in, v1_id)
+              %__MODULE__{g |
+                  in_edges: Map.put(ie, v2_id, v2_in),
+                  out_edges: Map.put(oe, v1_id, v1_out)
+              }
               |> add_vertex(v3)
               |> add_edge(v1, v3, meta)
               |> add_edge(v3, v2, meta)
@@ -443,7 +475,7 @@ defmodule Graph do
       ...> Graph.edges(g)
       []
   """
-  def delete_edge(%__MODULE__{edges: es, edges_meta: es_meta, vertices: vs} = g, a, b) do
+  def delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: es_meta, vertices: vs} = g, a, b) do
     case Map.get(vs, a) do
       nil ->
         g
@@ -452,15 +484,18 @@ defmodule Graph do
           nil ->
             g
           b_id ->
-            case Map.get(es, a_id) do
-              nil ->
+            case {Map.get(oe, a_id), Map.get(ie, b_id)} do
+              {out_n, in_n} when is_nil(out_n) or is_nil(in_n) ->
                 g
-              neighbors ->
-                new_neighbors = MapSet.delete(neighbors, b_id)
+              {out_neighbors, in_neighbors} ->
+                out_neighbors = MapSet.delete(out_neighbors, b_id)
+                in_neighbors = MapSet.delete(in_neighbors, a_id)
                 es_meta_new = Map.delete(es_meta, {a_id, b_id})
                 %__MODULE__{g |
-                  edges: Map.put(es, a_id, new_neighbors),
-                  edges_meta: es_meta_new}
+                  in_edges: Map.put(ie, b_id, in_neighbors),
+                  out_edges: Map.put(oe, a_id, out_neighbors),
+                  edges_meta: es_meta_new
+                }
             end
         end
     end
@@ -504,24 +539,11 @@ defmodule Graph do
       [%Graph.Edge{v1: :b, v2: :a}, %Graph.Edge{v1: :c, v2: :b}]
   """
   @spec transpose(t) :: t
-  def transpose(%__MODULE__{edges: es, edges_meta: es_meta} = g) do
-    es2 =
-      es
-      |> Enum.reduce(%{}, fn {v1, v1_out}, acc ->
-        Enum.reduce(v1_out, acc, fn v2, acc2 ->
-          case Map.get(acc2, v2) do
-            nil ->
-              Map.put(acc2, v2, MapSet.new([v1]))
-            v2_out ->
-              Map.put(acc2, v2, MapSet.put(v2_out, v1))
-          end
-        end)
-      end)
+  def transpose(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: es_meta} = g) do
     es_meta2 =
       es_meta
       |> Enum.reduce(%{}, fn {{v1, v2}, meta}, acc -> Map.put(acc, {v2, v1}, meta) end)
-
-    %__MODULE__{g | edges: es2, edges_meta: es_meta2}
+    %__MODULE__{g | in_edges: oe, out_edges: ie, edges_meta: es_meta2}
   end
 
   @doc """
@@ -529,7 +551,7 @@ defmodule Graph do
   For each vertex in the returned list, no out-neighbors occur earlier in the list.
   """
   @spec topsort(t) :: [vertex]
-  defdelegate topsort(g), to: Graph.Impl
+  defdelegate topsort(g), to: Graph.Impl, as: :topsort
 
   @doc """
   Returns a list of connected components, where each component is a list of vertices.
@@ -698,18 +720,15 @@ defmodule Graph do
 
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.
   """
-  def in_degree(%__MODULE__{vertices: vs, edges: es}, v) do
+  def in_degree(%__MODULE__{vertices: vs, in_edges: ie}, v) do
     case Map.get(vs, v) do
       nil ->
         0
       v_id ->
-        Enum.reduce(es, 0, fn {_, out}, acc ->
-          if MapSet.member?(out, v_id) do
-            acc+1
-          else
-            acc
-          end
-        end)
+        case Map.get(ie, v_id) do
+          nil -> 0
+          v_in -> MapSet.size(v_in)
+        end
     end
   end
 
@@ -719,12 +738,15 @@ defmodule Graph do
   The *out-degree* of a vertex is the number of edges directed outbound from that vertex.
   """
   @spec out_degree(t, vertex) :: non_neg_integer
-  def out_degree(%__MODULE__{edges: es, vertices: vs}, v) do
+  def out_degree(%__MODULE__{vertices: vs, out_edges: oe}, v) do
     case Map.get(vs, v) do
       nil ->
         0
       v_id ->
-        MapSet.size(Map.get(es, v_id, MapSet.new))
+        case Map.get(oe, v_id) do
+          nil -> 0
+          v_out -> MapSet.size(v_out)
+        end
     end
   end
 
@@ -732,18 +754,15 @@ defmodule Graph do
   Returns a list of vertices which all have edges coming in to the given vertex `v`.
   """
   @spec in_neighbors(t, vertex) :: [vertex]
-  def in_neighbors(%Graph{vertices: vertices, edges: edges}, v) do
+  def in_neighbors(%Graph{vertices: vertices, ids: ids, in_edges: ie}, v) do
     case Map.get(vertices, v) do
       nil ->
         []
       v_id ->
-        Enum.reduce(edges, [], fn {v1_id, out_edges}, acc ->
-          if MapSet.member?(out_edges, v_id) do
-            [Map.get(vertices, v1_id)|acc]
-          else
-            acc
-          end
-        end)
+        case Map.get(ie, v_id) do
+          nil -> []
+          v_in -> Enum.map(v_in, &Map.get(ids, &1))
+        end
     end
   end
 
@@ -751,17 +770,21 @@ defmodule Graph do
   Returns a list of `Graph.Edge` structs representing the in edges to vertex `v`.
   """
   @spec in_edges(t, vertex) :: Edge.t
-  def in_edges(%__MODULE__{edges_meta: es_meta, vertices: vs, ids: ids} = g, v) do
-    case Map.get(vs, v) do
+  def in_edges(%__MODULE__{vertices: vertices, ids: ids, in_edges: ie, edges_meta: es_meta}, v) do
+    case Map.get(vertices, v) do
       nil ->
         []
       v_id ->
-        Graph.Impl.in_neighbors(g, v_id)
-        |> Enum.map(fn v2_id ->
-          v2 = Map.get(ids, v2_id)
-          meta = Map.get(es_meta, {v2_id, v_id}, [])
-          Edge.new(v2, v, meta)
-        end)
+        case Map.get(ie, v_id) do
+          nil ->
+            []
+          v_in ->
+            Enum.map(v_in, fn id ->
+              v2 = Map.get(ids, id)
+              meta = Map.get(es_meta, {id, v_id}, [])
+              Edge.new(v2, v, meta)
+            end)
+        end
     end
   end
 
@@ -769,14 +792,15 @@ defmodule Graph do
   Returns a list of vertices which the given vertex `v` has edges going to.
   """
   @spec out_neighbors(t, vertex) :: [vertex]
-  def out_neighbors(%__MODULE__{edges: es, vertices: vs}, v) do
-    case Map.get(vs, v) do
+  def out_neighbors(%__MODULE__{vertices: vertices, ids: ids, out_edges: oe}, v) do
+    case Map.get(vertices, v) do
       nil ->
         []
       v_id ->
-        es
-        |> Map.get(v_id, MapSet.new)
-        |> Enum.map(&Map.get(vs, &1))
+        case Map.get(oe, v_id) do
+          nil -> []
+          v_out -> Enum.map(v_out, &Map.get(ids, &1))
+        end
     end
   end
 
@@ -784,17 +808,21 @@ defmodule Graph do
   Returns a list of `Graph.Edge` structs representing the out edges from vertex `v`.
   """
   @spec out_edges(t, vertex) :: Edge.t
-  def out_edges(%__MODULE__{edges_meta: es_meta, vertices: vs, ids: ids} = g, v) do
+  def out_edges(%__MODULE__{vertices: vs, ids: ids, out_edges: oe, edges_meta: es_meta}, v) do
     case Map.get(vs, v) do
       nil ->
         []
       v_id ->
-        Graph.Impl.out_neighbors(g, v_id)
-        |> Enum.map(fn v2_id ->
-          v2 = Map.get(ids, v2_id)
-          meta = Map.get(es_meta, {v_id, v2_id}, [])
-          Edge.new(v, v2, meta)
-        end)
+        case Map.get(oe, v_id) do
+          nil ->
+            []
+          v_out ->
+            Enum.map(v_out, fn id ->
+              v2 = Map.get(ids, id)
+              meta = Map.get(es_meta, {v_id, id}, [])
+              Edge.new(v, v2, meta)
+            end)
+        end
     end
   end
 
@@ -804,7 +832,7 @@ defmodule Graph do
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
-  def subgraph(%__MODULE__{edges: edges, edges_meta: es_meta, vertices: vertices, ids: ids}, vs) do
+  def subgraph(%__MODULE__{vertices: vertices, ids: ids, out_edges: oe, edges_meta: es_meta}, vs) do
     allowed =
       vs
       |> Enum.map(&Map.get(vertices, &1))
@@ -814,7 +842,7 @@ defmodule Graph do
     Enum.reduce(allowed, Graph.new, fn v_id, sg ->
       v = Map.get(ids, v_id)
       sg = Graph.add_vertex(sg, v)
-      edges
+      oe
       |> Map.get(v_id, MapSet.new)
       |> MapSet.intersection(allowed)
       |> Enum.reduce(sg, fn v2_id, sg ->
