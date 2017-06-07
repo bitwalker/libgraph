@@ -2,35 +2,27 @@ defmodule Graph.Pathing do
   @moduledoc """
   This module contains implementation code for path finding algorithms used by `libgraph`.
   """
+  import Graph.Impl, only: [find_vertex_id: 2, find_out_edges: 2]
 
   @doc """
   Finds the shortest path between `a` and `b` as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  def shortest_path(%Graph{out_edges: oe, vertices: vertices, ids: ids} = g, a, b) do
-    case Map.get(vertices, a) do
-      nil ->
-        nil
-      a_id ->
-        case Map.get(vertices, b) do
-          nil ->
-            nil
-          b_id ->
-            case Map.get(oe, a_id) do
-              nil ->
-                nil
-              a_out ->
-                tree = Graph.new |> Graph.add_vertex(a_id)
-                q = :queue.new()
-                q = a_out |> MapSet.to_list |> List.foldl(q, fn id, q -> :queue.in({a_id, id}, q) end)
-                case do_shortpath(q, g, b_id, tree) do
-                  nil ->
-                    nil
-                  path ->
-                    for id <- path, do: Map.get(ids, id)
-                end
-            end
-        end
+  def shortest_path(%Graph{ids: ids} = g, a, b) do
+    with {:ok, a_id}  <- find_vertex_id(g, a),
+         {:ok, b_id}  <- find_vertex_id(g, b),
+         {:ok, a_out} <- find_out_edges(g, a_id) do
+      tree = Graph.new |> Graph.add_vertex(a_id)
+      q = :queue.new()
+      q = a_out |> MapSet.to_list |> List.foldl(q, fn id, q -> :queue.in({a_id, id}, q) end)
+      case do_shortpath(q, g, b_id, tree) do
+        nil ->
+          nil
+        path ->
+          for id <- path, do: Map.get(ids, id)
+      end
+    else
+      _ -> nil
     end
   end
 
@@ -38,24 +30,19 @@ defmodule Graph.Pathing do
   Finds all paths between `a` and `b`, each path as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  def all(%Graph{out_edges: oe, vertices: vertices, ids: ids} = g, a, b) do
-    case Map.get(vertices, a) do
-      nil ->
-        nil
-      a_id ->
-        case Map.get(vertices, b) do
-          nil ->
-            nil
-          b_id ->
-            a_out_neighbors = Map.get(oe, a_id)
-            case build_paths(g, a_out_neighbors, b_id, [a_id], []) do
-              nil -> nil
-              paths ->
-                for path <- paths do
-                  for id <- path, do: Map.get(ids, id)
-                end
-            end
-        end
+  def all(%Graph{ids: ids} = g, a, b) do
+    with {:ok, a_id}  <- find_vertex_id(g, a),
+         {:ok, b_id}  <- find_vertex_id(g, b),
+         {:ok, a_out} <- find_out_edges(g, a_id) do
+      case build_paths(g, a_out, b_id, [a_id], []) do
+        nil ->
+          []
+        paths ->
+          paths
+          |> Enum.map(fn path -> Enum.map(path, &Map.get(ids, &1)) end)
+      end
+    else
+      _ -> []
     end
   end
 
@@ -96,7 +83,9 @@ defmodule Graph.Pathing do
 
   defp build_paths(%Graph{} = g, neighbors, target_id, path, acc) do
     if MapSet.member?(neighbors, target_id) do
-      [Enum.reverse([target_id|path]) | acc]
+      acc = [Enum.reverse([target_id|path]) | acc]
+      neighbors = MapSet.difference(neighbors, MapSet.new(path))
+      check_neighbors(g, MapSet.to_list(neighbors), target_id, path, acc)
     else
       neighbors = MapSet.difference(neighbors, MapSet.new(path))
       check_neighbors(g, MapSet.to_list(neighbors), target_id, path, acc)
@@ -107,12 +96,16 @@ defmodule Graph.Pathing do
     acc
   end
   defp check_neighbors(%Graph{out_edges: oe} = g, [next_neighbor_id|neighbors], target_id, path, acc) do
-    next_neighbors = Map.get(oe, next_neighbor_id)
-    case build_paths(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
+    case Map.get(oe, next_neighbor_id) do
       nil ->
         check_neighbors(g, neighbors, target_id, path, acc)
-      paths ->
-        check_neighbors(g, neighbors, target_id, path, paths)
+      next_neighbors ->
+        case build_paths(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
+          nil ->
+            check_neighbors(g, neighbors, target_id, path, acc)
+          paths ->
+            check_neighbors(g, neighbors, target_id, path, paths)
+        end
     end
   end
 end

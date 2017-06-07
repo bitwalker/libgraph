@@ -210,7 +210,7 @@ defmodule Graph do
     |> Enum.flat_map(fn {source_id, out_neighbors} ->
       source = Map.get(ids, source_id)
       for out_neighbor <- out_neighbors do
-        meta = Map.get(edges_meta, {source_id, out_neighbor}, [])
+        meta = Map.get(edges_meta, {source_id, out_neighbor})
         Edge.new(source, Map.get(ids, out_neighbor), meta)
       end
     end)
@@ -286,7 +286,7 @@ defmodule Graph do
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
   def replace_vertex(%__MODULE__{vertices: vs, ids: ids} = g, v, rv) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
            vs  <- Map.put(Map.delete(vs, v), rv, v_id),
            ids <- Map.put(ids, v_id, rv) do
       %__MODULE__{g | vertices: vs, ids: ids}
@@ -311,7 +311,7 @@ defmodule Graph do
   """
   @spec delete_vertex(t, vertex) :: t
   def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges_meta: em, vertices: vs, ids: ids} = g, v) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
            oe <- Map.delete(oe, v_id),
            ie <- Map.delete(ie, v_id),
            vs <- Map.delete(vs, v),
@@ -356,8 +356,7 @@ defmodule Graph do
   """
   @spec add_edge(t, Edge.t) :: t
   def add_edge(%__MODULE__{} = g, %Edge{v1: v1, v2: v2} = edge) do
-    opts = Enum.reject([label: edge.label, weight: edge.weight], fn {_, v} -> is_nil(v) end)
-    add_edge(g, v1, v2, opts)
+    add_edge(g, v1, v2, Edge.to_meta(edge))
   end
 
   @doc """
@@ -381,7 +380,7 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
   """
   @spec add_edge(t, vertex, vertex) :: t
-  @spec add_edge(t, vertex, vertex, Edge.edge_opts) :: t
+  @spec add_edge(t, vertex, vertex, Edge.edge_opts) :: t | {:error, {:invalid_edge_option, term}}
   def add_edge(%__MODULE__{} = g, a, b, opts \\ []) do
     %__MODULE__{in_edges: ie, out_edges: oe, edges_meta: es_meta, vertices: vs} = g =
       g |> add_vertex(a) |> add_vertex(b)
@@ -398,11 +397,15 @@ defmodule Graph do
         nil -> MapSet.new([a_id])
         ms  -> MapSet.put(ms, a_id)
       end
+    meta = Edge.options_to_meta(opts)
     %__MODULE__{g |
       in_edges: Map.put(ie, b_id, in_neighbors),
       out_edges: Map.put(oe, a_id, out_neighbors),
-      edges_meta: Map.put(es_meta, {a_id, b_id}, opts)
+      edges_meta: Map.put(es_meta, {a_id, b_id}, meta)
     }
+  catch
+    _, {:error, {:invalid_edge_option, _}} = err ->
+      err
   end
 
   @doc """
@@ -426,6 +429,8 @@ defmodule Graph do
     Enum.reduce(es, g, fn
       %Edge{} = edge, acc ->
         add_edge(acc, edge)
+      {v1, v2}, acc ->
+        add_edge(acc, v1, v2)
       bad_edge, _acc ->
         throw {:error, {:invalid_edge, bad_edge}}
     end)
@@ -450,10 +455,10 @@ defmodule Graph do
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
   def split_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: em} = g, v1, v2, v3) do
-    with {:ok, v1_id}  <- find_vertex_id(g, v1),
-         {:ok, v2_id}  <- find_vertex_id(g, v2),
-         {:ok, v1_out} <- find_out_edges(g, v1_id),
-         {:ok, v2_in}  <- find_in_edges(g, v2_id),
+    with {:ok, v1_id}  <- Graph.Impl.find_vertex_id(g, v1),
+         {:ok, v2_id}  <- Graph.Impl.find_vertex_id(g, v2),
+         {:ok, v1_out} <- Graph.Impl.find_out_edges(g, v1_id),
+         {:ok, v2_in}  <- Graph.Impl.find_in_edges(g, v2_id),
           true   <- MapSet.member?(v1_out, v2_id),
           meta   <- Map.get(em, {v1_id, v2_id}),
           v1_out <- MapSet.delete(v1_out, v2_id),
@@ -469,16 +474,27 @@ defmodule Graph do
     end
   end
 
+  @doc """
+  Updates the metadata (weight/label) for an edge using the provided options.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edge(:a, :b)
+      ...> [%Graph.Edge{v1: :a, v2: :b, label: nil, weight: 1}] = Graph.edges(g)
+      ...> %Graph{} = g = Graph.update_edge(g, :a, :b, weight: 2, label: :foo)
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
+  """
   @spec update_edge(t, vertex, vertex, Edge.edge_opts) :: t | {:error, :no_such_edge}
   def update_edge(%__MODULE__{edges_meta: em} = g, v1, v2, opts) when is_list(opts) do
-    with {:ok, v1_id} <- find_vertex_id(g, v1),
-         {:ok, v2_id} <- find_vertex_id(g, v2),
-         {opts, _} <- Keyword.split(opts, [:weight, :label]) do
+    with {:ok, v1_id} <- Graph.Impl.find_vertex_id(g, v1),
+         {:ok, v2_id} <- Graph.Impl.find_vertex_id(g, v2),
+          opts when is_map(opts) <- Edge.options_to_meta(opts) do
       case Map.get(em, {v1_id, v2_id}) do
         nil ->
-          g
-        meta when is_list(meta) ->
-          %__MODULE__{g | edges_meta: Map.put(em, {v1_id, v2_id}, Keyword.merge(meta, opts))}
+          %__MODULE__{g | edges_meta: Map.put(em, {v1_id, v2_id}, opts)}
+        meta ->
+          %__MODULE__{g | edges_meta: Map.put(em, {v1_id, v2_id}, Map.merge(meta, opts))}
       end
     else
       _ -> g
@@ -497,10 +513,10 @@ defmodule Graph do
       []
   """
   def delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: meta} = g, a, b) do
-    with {:ok, a_id}  <- find_vertex_id(g, a),
-         {:ok, b_id}  <- find_vertex_id(g, b),
-         {:ok, a_out} <- find_out_edges(g, a_id),
-         {:ok, b_in}  <- find_in_edges(g, b_id) do
+    with {:ok, a_id}  <- Graph.Impl.find_vertex_id(g, a),
+         {:ok, b_id}  <- Graph.Impl.find_vertex_id(g, b),
+         {:ok, a_out} <- Graph.Impl.find_out_edges(g, a_id),
+         {:ok, b_in}  <- Graph.Impl.find_in_edges(g, b_id) do
       a_out = MapSet.delete(a_out, b_id)
       b_in  = MapSet.delete(b_in, a_id)
       meta  = Map.delete(meta, {a_id, b_id})
@@ -733,8 +749,8 @@ defmodule Graph do
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.
   """
   def in_degree(%__MODULE__{} = g, v) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
-         {:ok, v_in} <- find_in_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+         {:ok, v_in} <- Graph.Impl.find_in_edges(g, v_id) do
       MapSet.size(v_in)
     else
       _ -> 0
@@ -748,8 +764,8 @@ defmodule Graph do
   """
   @spec out_degree(t, vertex) :: non_neg_integer
   def out_degree(%__MODULE__{} = g, v) do
-    with {:ok, v_id}  <- find_vertex_id(g, v),
-         {:ok, v_out} <- find_out_edges(g, v_id) do
+    with {:ok, v_id}  <- Graph.Impl.find_vertex_id(g, v),
+         {:ok, v_out} <- Graph.Impl.find_out_edges(g, v_id) do
       MapSet.size(v_out)
     else
       _ -> 0
@@ -761,8 +777,8 @@ defmodule Graph do
   """
   @spec in_neighbors(t, vertex) :: [vertex]
   def in_neighbors(%Graph{ids: ids} = g, v) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
-         {:ok, v_in} <- find_in_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+         {:ok, v_in} <- Graph.Impl.find_in_edges(g, v_id) do
       Enum.map(v_in, &Map.get(ids, &1))
     else
       _ -> []
@@ -774,8 +790,8 @@ defmodule Graph do
   """
   @spec in_edges(t, vertex) :: Edge.t
   def in_edges(%__MODULE__{ids: ids, edges_meta: em} = g, v) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
-         {:ok, v_in} <- find_in_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+         {:ok, v_in} <- Graph.Impl.find_in_edges(g, v_id) do
       Enum.map(v_in, fn id ->
         v2 = Map.get(ids, id)
         meta = Map.get(em, {id, v_id}, [])
@@ -791,8 +807,8 @@ defmodule Graph do
   """
   @spec out_neighbors(t, vertex) :: [vertex]
   def out_neighbors(%__MODULE__{ids: ids} = g, v) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
-         {:ok, v_out} <- find_out_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+         {:ok, v_out} <- Graph.Impl.find_out_edges(g, v_id) do
       Enum.map(v_out, &Map.get(ids, &1))
     else
       _ -> []
@@ -804,8 +820,8 @@ defmodule Graph do
   """
   @spec out_edges(t, vertex) :: Edge.t
   def out_edges(%__MODULE__{ids: ids, edges_meta: es_meta} = g, v) do
-    with {:ok, v_id} <- find_vertex_id(g, v),
-         {:ok, v_out} <- find_out_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+         {:ok, v_out} <- Graph.Impl.find_out_edges(g, v_id) do
       Enum.map(v_out, fn id ->
         v2 = Map.get(ids, id)
         meta = Map.get(es_meta, {v_id, id}, [])
@@ -841,28 +857,5 @@ defmodule Graph do
         Graph.add_edge(sg, v, v2, meta)
       end)
     end)
-  end
-
-  ## Private
-
-  defp find_vertex_id(%__MODULE__{vertices: vs}, v) do
-    case Map.get(vs, v) do
-      nil  -> nil
-      v_id -> {:ok, v_id}
-    end
-  end
-
-  defp find_out_edges(%__MODULE__{out_edges: oe}, v_id) do
-    case Map.get(oe, v_id) do
-      nil -> nil
-      v_out -> {:ok, v_out}
-    end
-  end
-
-  defp find_in_edges(%__MODULE__{in_edges: ie}, v_id) do
-    case Map.get(ie, v_id) do
-      nil -> nil
-      v_in -> {:ok, v_in}
-    end
   end
 end

@@ -1,6 +1,7 @@
 defmodule GraphTest do
   use ExUnit.Case
   doctest Graph
+  alias Graph.Edge
 
   test "get info about graph" do
     g = build_basic_cyclic_graph()
@@ -75,6 +76,26 @@ defmodule GraphTest do
     g = build_basic_cyclic_graph()
 
     assert [:a, :b, :d, :e] = Graph.get_shortest_path(g, :a, :e)
+  end
+
+  test "out_edges" do
+    g = build_basic_acyclic_graph()
+    assert [%Edge{v1: :c, v2: :d}] = Graph.out_edges(g, :c)
+  end
+
+  test "in_edges" do
+    g = build_basic_acyclic_graph()
+    assert [%Edge{v1: :b, v2: :d}, %Edge{v1: :c, v2: :d}] = Graph.in_edges(g, :d)
+  end
+
+  test "out_neighbors" do
+    g = build_basic_acyclic_graph()
+    assert [:d] = Graph.out_neighbors(g, :c)
+  end
+
+  test "in_neighbors" do
+    g = build_basic_acyclic_graph()
+    assert [:b, :c] = Graph.in_neighbors(g, :d)
   end
 
   defp build_basic_cyclic_graph do

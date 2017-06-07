@@ -1,5 +1,27 @@
 defmodule Graph.Impl do
   @moduledoc false
+  @compile {:inline, find_vertex_id: 2, find_out_edges: 2, find_in_edges: 2}
+
+  def find_vertex_id(%Graph{vertices: vs}, v) do
+    case Map.get(vs, v) do
+      nil  -> nil
+      v_id -> {:ok, v_id}
+    end
+  end
+
+  def find_out_edges(%Graph{out_edges: oe}, v_id) do
+    case Map.get(oe, v_id) do
+      nil -> nil
+      v_out -> {:ok, v_out}
+    end
+  end
+
+  def find_in_edges(%Graph{in_edges: ie}, v_id) do
+    case Map.get(ie, v_id) do
+      nil -> nil
+      v_in -> {:ok, v_in}
+    end
+  end
 
   def topsort(%Graph{ids: ids} = g) do
     l = reverse_postorder(g)
@@ -52,13 +74,8 @@ defmodule Graph.Impl do
   def loop_vertices(%Graph{ids: ids} = g) do
     for id <- loop_vertices_w_ids(g), do: Map.get(ids, id)
   end
-
   defp loop_vertices_w_ids(%Graph{ids: ids} = g) do
     for v <- Map.keys(ids), is_reflexive_vertex(g, v), do: v
-  end
-
-  def is_reflexive_vertex(g, v) do
-    Enum.member?(out_neighbors(g, v), v)
   end
 
   def components(%Graph{ids: ids} = g) do
@@ -73,23 +90,31 @@ defmodule Graph.Impl do
     end
   end
 
-  def reachable(%Graph{ids: ids} = g, vs) when is_list(vs) do
+  def reachable(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &Map.get(vertices, &1))
     for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(ids, id)
   end
 
-  def reachable_neighbors(%Graph{ids: ids} = g, vs) when is_list(vs) do
+  def reachable_neighbors(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &Map.get(vertices, &1))
     for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
   end
 
-  def reaching(%Graph{ids: ids} = g, vs) when is_list(vs) do
+  def reaching(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &Map.get(vertices, &1))
     for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(ids, id)
   end
 
-  def reaching_neighbors(%Graph{ids: ids} = g, vs) when is_list(vs) do
+  def reaching_neighbors(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &Map.get(vertices, &1))
     for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
   end
 
   ## Private
+
+  defp is_reflexive_vertex(g, v) do
+    Enum.member?(out_neighbors(g, v), v)
+  end
 
   defp forest(%Graph{ids: ids} = g, fun) do
     forest(g, fun, Map.keys(ids))
