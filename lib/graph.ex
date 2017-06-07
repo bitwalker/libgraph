@@ -61,6 +61,20 @@ defmodule Graph do
 
   @doc """
   Returns a map of summary information about this graph.
+
+  NOTE: The `size_in_bytes` value is calculated via `:erlang.external_size/1`,
+  which determines the size in bytes when the term is serialized to External Term Format.
+  Since the size in bytes is for the serialized representation, it is always going to be a higher
+  value than the actual size in memory, since Erlang is able to share references to values
+  rather than copy them. However, the value is still a handy "worst-case" estimate, so I still
+  consider it somewhat useful information to have handy.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = g |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> Graph.info(g)
+      %{num_vertices: 4, num_edges: 2, size_in_bytes: 420}
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
   def info(%__MODULE__{} = g) do
@@ -71,6 +85,12 @@ defmodule Graph do
 
   @doc """
   Returns the number of edges in the graph
+
+  ## Example
+
+      iex> g = Graph.add_edges(Graph.new, [{:a, :b}, {:b, :c}, {:a, :a}])
+      ...> Graph.num_edges(g)
+      3
   """
   @spec num_edges(t) :: non_neg_integer
   def num_edges(%__MODULE__{out_edges: es}) do
@@ -79,6 +99,12 @@ defmodule Graph do
 
   @doc """
   Returns the number of vertices in the graph
+
+  ## Example
+
+      iex> g = Graph.add_vertices(Graph.new, [:a, :b, :c])
+      ...> Graph.num_vertices(g)
+      3
   """
   @spec num_vertices(t) :: non_neg_integer
   def num_vertices(%__MODULE__{vertices: vs}) do
@@ -169,7 +195,16 @@ defmodule Graph do
   as soon as the shortest path to `b` is found. It follows very closely the implementation of
   `get_short_path` from `:digraph`, the only difference being in how some lookups, etc. are performed.
 
-  Example usages can be found in the test suite.
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:b, :d}])
+      ...> Graph.get_shortest_path(g, :a, :d)
+      [:a, :b, :d]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :c}, {:b, :c}, {:b, :d}])
+      ...> Graph.get_shortest_path(g, :a, :d)
+      nil
   """
   @spec get_shortest_path(t, vertex, vertex) :: [vertex]
   defdelegate get_shortest_path(g, a, b), to: Graph.Pathing, as: :shortest_path
@@ -181,7 +216,15 @@ defmodule Graph do
   graph until all paths are found. Order is guaranteed to be deterministic,
   but not guaranteed to be in any meaningful order (i.e. shortest to longest).
 
-  Example usages can be found in the test suite.
+  ## Example
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:b, :d}, {:c, :a}])
+      ...> Graph.get_paths(g, :a, :d)
+      [[:a, :b, :c, :d], [:a, :b, :d]]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :c}, {:b, :c}, {:b, :d}])
+      ...> Graph.get_paths(g, :a, :d)
+      []
   """
   @spec get_paths(t, vertex, vertex) :: [[vertex]]
   defdelegate get_paths(g, a, b), to: Graph.Pathing, as: :all
@@ -577,6 +620,18 @@ defmodule Graph do
   @doc """
   Returns a topological ordering of the vertices of graph `g`, if such an ordering exists, otherwise it returns false.
   For each vertex in the returned list, no out-neighbors occur earlier in the list.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}])
+      ...> Graph.topsort(g)
+      [:a, :b, :c, :d]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}, {:c, :a}])
+      ...> Graph.topsort(g)
+      false
   """
   @spec topsort(t) :: [vertex]
   defdelegate topsort(g), to: Graph.Impl, as: :topsort
@@ -592,7 +647,12 @@ defmodule Graph do
   A *maximal subgraph* is a subgraph with property `P` where all other subgraphs which contain the same vertices
   do not have that same property `P`.
 
-  See the test suite for an example of how this is used.
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}, {:c, :a}])
+      ...> Graph.components(g)
+      [[:d, :b, :c, :a]]
   """
   @spec components(t) :: [[vertex]]
   defdelegate components(g), to: Graph.Impl
@@ -605,7 +665,12 @@ defmodule Graph do
   See `components/1` for the definitions of *subgraph* and *maximal subgraph* if you are unfamiliar with the
   terminology.
 
-  See the test suite for an example of how this is used.
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}, {:c, :a}])
+      ...> Graph.strong_components(g)
+      [[:d], [:b, :c, :a]]
   """
   @spec strong_components(t) :: [[vertex]]
   defdelegate strong_components(g), to: Graph.Impl
@@ -615,6 +680,13 @@ defmodule Graph do
   there is a path in the graph from some vertex of `vs` to `v`.
 
   As paths of length zero are allowed, the vertices of `vs` are also included in the returned list.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}])
+      ...> Graph.reachable(g, [:a])
+      [:d, :c, :b, :a]
   """
   @spec reachable(t, [vertex]) :: [[vertex]]
   defdelegate reachable(g, vs), to: Graph.Impl
@@ -624,6 +696,13 @@ defmodule Graph do
   there is a path in the graph of length one or more from some vertex of `vs` to `v`.
 
   As a consequence, only those vertices of `vs` that are included in some cycle are returned.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}])
+      ...> Graph.reachable_neighbors(g, [:a])
+      [:d, :c, :b]
   """
   @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
   defdelegate reachable_neighbors(g, vs), to: Graph.Impl
@@ -633,6 +712,13 @@ defmodule Graph do
   there is a path from `v` to some vertex of `vs`.
 
   As paths of length zero are allowed, the vertices of `vs` are also included in the returned list.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}])
+      ...> Graph.reaching(g, [:d])
+      [:b, :a, :c, :d]
   """
   @spec reaching(t, [vertex]) :: [[vertex]]
   defdelegate reaching(g, vs), to: Graph.Impl
@@ -642,16 +728,16 @@ defmodule Graph do
   there is a path of length one or more from `v` to some vertex of `vs`.
 
   As a consequence, only those vertices of `vs` that are included in some cycle are returned.
+
+  ## Example
+
+     iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+     ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :a}, {:b, :d}])
+     ...> Graph.reaching_neighbors(g, [:b])
+     [:b, :c, :a]
   """
   @spec reaching_neighbors(t, [vertex]) :: [[vertex]]
   defdelegate reaching_neighbors(g, vs), to: Graph.Impl
-
-  @doc """
-  Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
-  collecting visited vertices in preorder.
-  """
-  @spec preorder(t) :: [vertex]
-  defdelegate preorder(g), to: Graph.Impl
 
   @doc """
   Maps a function over all the vertices in a graph using a depth-first traversal
@@ -730,15 +816,62 @@ defmodule Graph do
 
   @doc """
   Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
+  collecting visited vertices in preorder.
+
+  ## Example
+
+  Our example code constructs a graph which looks like so:
+
+           :a
+             \
+              :b
+             /  \
+           :c   :d
+           /
+         :e
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d, :e])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:b, :c}, {:b, :d}, {:c, :e}])
+      ...> Graph.preorder(g)
+      [:a, :b, :c, :e, :d]
+  """
+  @spec preorder(t) :: [vertex]
+  defdelegate preorder(g), to: Graph.Impl
+
+  @doc """
+  Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
   collecting visited vertices in postorder. More precisely, the vertices visited while searching from an
   arbitrarily chosen vertex are collected in postorder, and all those collected vertices are placed before
   the subsequently visited vertices.
+
+  ## Example
+
+  Our example code constructs a graph which looks like so:
+
+          :a
+            \
+             :b
+            /  \
+           :c   :d
+          /
+         :e
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d, :e])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:b, :c}, {:b, :d}, {:c, :e}])
+      ...> Graph.postorder(g)
+      [:e, :c, :d, :b, :a]
   """
   @spec postorder(t) :: [vertex]
   defdelegate postorder(g), to: Graph.Impl
 
   @doc """
-  Returns a list of vertices from graph `g` which are included in a loop.
+  Returns a list of vertices from graph `g` which are included in a loop, where a loop is a cycle of length 1.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :a)
+      ...> Graph.loop_vertices(g)
+      [:a]
   """
   @spec loop_vertices(t) :: [vertex]
   defdelegate loop_vertices(g), to: Graph.Impl
@@ -747,6 +880,12 @@ defmodule Graph do
   Returns the in-degree of vertex `v` of graph `g`.
 
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
+      ...> Graph.in_degree(g, :b)
+      1
   """
   def in_degree(%__MODULE__{} = g, v) do
     with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
@@ -761,6 +900,12 @@ defmodule Graph do
   Returns the out-degree of vertex `v` of graph `g`.
 
   The *out-degree* of a vertex is the number of edges directed outbound from that vertex.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
+      ...> Graph.out_degree(g, :a)
+      1
   """
   @spec out_degree(t, vertex) :: non_neg_integer
   def out_degree(%__MODULE__{} = g, v) do
