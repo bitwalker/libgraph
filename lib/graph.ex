@@ -20,8 +20,7 @@ defmodule Graph do
   - Additionally, each edge with metadata (weight/label) will incur the cost for a new list, a tuple (per option), and
   the size of the term stored
 
-  You can obtain a "true" size in bytes, by calling `Graph.info/1`, which gets the size in bytes of the graph when encoded
-  using Erlang External Term Format.
+  You can obtain a "true" size in bytes, by calling `Graph.info/1`.
 
   The reason for the different internal structures, particularly the inverse indexes, is performance. In order to efficiently
   perform queries on the graph, we need quick key-based lookup for both in-edges and out-edges for a vertex. Additionally, we
@@ -62,25 +61,21 @@ defmodule Graph do
   @doc """
   Returns a map of summary information about this graph.
 
-  NOTE: The `size_in_bytes` value is calculated via `:erlang.external_size/1`,
-  which determines the size in bytes when the term is serialized to External Term Format.
-  Since the size in bytes is for the serialized representation, it is always going to be a higher
-  value than the actual size in memory, since Erlang is able to share references to values
-  rather than copy them. However, the value is still a handy "worst-case" estimate, so I still
-  consider it somewhat useful information to have handy.
+  NOTE: The `size_in_bytes` value is an estimate, not a perfectly precise value, but
+  should be close enough to be useful.
 
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
       ...> g = g |> Graph.add_edges([{:a, :b}, {:b, :c}])
       ...> Graph.info(g)
-      %{num_vertices: 4, num_edges: 2, size_in_bytes: 420}
+      %{num_vertices: 4, num_edges: 2, size_in_bytes: 1032}
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
   def info(%__MODULE__{} = g) do
     %{num_edges: num_edges(g),
       num_vertices: num_vertices(g),
-      size_in_bytes: :erlang.external_size(g)}
+      size_in_bytes: Graph.Utils.sizeof(g)}
   end
 
   @doc """
