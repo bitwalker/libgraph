@@ -2,7 +2,8 @@ defmodule Graph.Pathing do
   @moduledoc """
   This module contains implementation code for path finding algorithms used by `libgraph`.
   """
-  import Graph.Impl, only: [find_vertex_id: 2, find_out_edges: 2, edge_weight: 3]
+  import Graph.Directed, only: [find_out_edges: 2]
+  import Graph.Utils, only: [find_vertex_id: 2, edge_weight: 3]
 
   @doc """
   Finds the shortest path between `a` and `b` as a list of vertices.

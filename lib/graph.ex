@@ -126,19 +126,19 @@ defmodule Graph do
   to every other vertex in the graph.
   """
   @spec is_arborescence?(t) :: boolean
-  defdelegate is_arborescence?(g), to: Graph.Impl
+  defdelegate is_arborescence?(g), to: Graph.Directed
 
   @doc """
   Returns the root vertex of the arborescence, if one exists, otherwise nil.
   """
   @spec arborescence_root(t) :: vertex | nil
-  defdelegate arborescence_root(g), to: Graph.Impl
+  defdelegate arborescence_root(g), to: Graph.Directed
 
   @doc """
   Returns true if and only if the graph `g` is acyclic.
   """
   @spec is_acyclic?(t) :: boolean
-  defdelegate is_acyclic?(g), to: Graph.Impl
+  defdelegate is_acyclic?(g), to: Graph.Directed
 
   @doc """
   Returns true if the graph `g` is not acyclic.
@@ -357,7 +357,7 @@ defmodule Graph do
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
   def replace_vertex(%__MODULE__{vertices: vs, ids: ids} = g, v, rv) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
            vs  <- Map.put(Map.delete(vs, v), rv, v_id),
            ids <- Map.put(ids, v_id, rv) do
       %__MODULE__{g | vertices: vs, ids: ids}
@@ -382,7 +382,7 @@ defmodule Graph do
   """
   @spec delete_vertex(t, vertex) :: t
   def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges_meta: em, vertices: vs, ids: ids} = g, v) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
            oe <- Map.delete(oe, v_id),
            ie <- Map.delete(ie, v_id),
            vs <- Map.delete(vs, v),
@@ -526,10 +526,10 @@ defmodule Graph do
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
   def split_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: em} = g, v1, v2, v3) do
-    with {:ok, v1_id}  <- Graph.Impl.find_vertex_id(g, v1),
-         {:ok, v2_id}  <- Graph.Impl.find_vertex_id(g, v2),
-         {:ok, v1_out} <- Graph.Impl.find_out_edges(g, v1_id),
-         {:ok, v2_in}  <- Graph.Impl.find_in_edges(g, v2_id),
+    with {:ok, v1_id}  <- Graph.Utils.find_vertex_id(g, v1),
+         {:ok, v2_id}  <- Graph.Utils.find_vertex_id(g, v2),
+         {:ok, v1_out} <- Graph.Directed.find_out_edges(g, v1_id),
+         {:ok, v2_in}  <- Graph.Directed.find_in_edges(g, v2_id),
           true   <- MapSet.member?(v1_out, v2_id),
           meta   <- Map.get(em, {v1_id, v2_id}),
           v1_out <- MapSet.delete(v1_out, v2_id),
@@ -558,8 +558,8 @@ defmodule Graph do
   """
   @spec update_edge(t, vertex, vertex, Edge.edge_opts) :: t | {:error, :no_such_edge}
   def update_edge(%__MODULE__{edges_meta: em} = g, v1, v2, opts) when is_list(opts) do
-    with {:ok, v1_id} <- Graph.Impl.find_vertex_id(g, v1),
-         {:ok, v2_id} <- Graph.Impl.find_vertex_id(g, v2),
+    with {:ok, v1_id} <- Graph.Utils.find_vertex_id(g, v1),
+         {:ok, v2_id} <- Graph.Utils.find_vertex_id(g, v2),
           opts when is_map(opts) <- Edge.options_to_meta(opts) do
       case Map.get(em, {v1_id, v2_id}) do
         nil ->
@@ -584,10 +584,10 @@ defmodule Graph do
       []
   """
   def delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges_meta: meta} = g, a, b) do
-    with {:ok, a_id}  <- Graph.Impl.find_vertex_id(g, a),
-         {:ok, b_id}  <- Graph.Impl.find_vertex_id(g, b),
-         {:ok, a_out} <- Graph.Impl.find_out_edges(g, a_id),
-         {:ok, b_in}  <- Graph.Impl.find_in_edges(g, b_id) do
+    with {:ok, a_id}  <- Graph.Utils.find_vertex_id(g, a),
+         {:ok, b_id}  <- Graph.Utils.find_vertex_id(g, b),
+         {:ok, a_out} <- Graph.Directed.find_out_edges(g, a_id),
+         {:ok, b_in}  <- Graph.Directed.find_in_edges(g, b_id) do
       a_out = MapSet.delete(a_out, b_id)
       b_in  = MapSet.delete(b_in, a_id)
       meta  = Map.delete(meta, {a_id, b_id})
@@ -662,7 +662,7 @@ defmodule Graph do
       false
   """
   @spec topsort(t) :: [vertex]
-  defdelegate topsort(g), to: Graph.Impl, as: :topsort
+  defdelegate topsort(g), to: Graph.Directed, as: :topsort
 
   @doc """
   Returns a list of connected components, where each component is a list of vertices.
@@ -683,7 +683,7 @@ defmodule Graph do
       [[:d, :b, :c, :a]]
   """
   @spec components(t) :: [[vertex]]
-  defdelegate components(g), to: Graph.Impl
+  defdelegate components(g), to: Graph.Directed
 
   @doc """
   Returns a list of strongly connected components, where each component is a list of vertices.
@@ -701,7 +701,7 @@ defmodule Graph do
       [[:d], [:b, :c, :a]]
   """
   @spec strong_components(t) :: [[vertex]]
-  defdelegate strong_components(g), to: Graph.Impl
+  defdelegate strong_components(g), to: Graph.Directed
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -717,7 +717,7 @@ defmodule Graph do
       [:d, :c, :b, :a]
   """
   @spec reachable(t, [vertex]) :: [[vertex]]
-  defdelegate reachable(g, vs), to: Graph.Impl
+  defdelegate reachable(g, vs), to: Graph.Directed
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -733,7 +733,7 @@ defmodule Graph do
       [:d, :c, :b]
   """
   @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
-  defdelegate reachable_neighbors(g, vs), to: Graph.Impl
+  defdelegate reachable_neighbors(g, vs), to: Graph.Directed
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -749,7 +749,7 @@ defmodule Graph do
       [:b, :a, :c, :d]
   """
   @spec reaching(t, [vertex]) :: [[vertex]]
-  defdelegate reaching(g, vs), to: Graph.Impl
+  defdelegate reaching(g, vs), to: Graph.Directed
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -765,7 +765,7 @@ defmodule Graph do
      [:b, :c, :a]
   """
   @spec reaching_neighbors(t, [vertex]) :: [[vertex]]
-  defdelegate reaching_neighbors(g, vs), to: Graph.Impl
+  defdelegate reaching_neighbors(g, vs), to: Graph.Directed
 
   @doc """
   Maps a function over all the vertices in a graph using a depth-first traversal
@@ -864,7 +864,7 @@ defmodule Graph do
       [:a, :b, :c, :e, :d]
   """
   @spec preorder(t) :: [vertex]
-  defdelegate preorder(g), to: Graph.Impl
+  defdelegate preorder(g), to: Graph.Directed
 
   @doc """
   Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
@@ -890,7 +890,7 @@ defmodule Graph do
       [:e, :c, :d, :b, :a]
   """
   @spec postorder(t) :: [vertex]
-  defdelegate postorder(g), to: Graph.Impl
+  defdelegate postorder(g), to: Graph.Directed
 
   @doc """
   Returns a list of vertices from graph `g` which are included in a loop, where a loop is a cycle of length 1.
@@ -902,7 +902,7 @@ defmodule Graph do
       [:a]
   """
   @spec loop_vertices(t) :: [vertex]
-  defdelegate loop_vertices(g), to: Graph.Impl
+  defdelegate loop_vertices(g), to: Graph.Directed
 
   @doc """
   Returns the in-degree of vertex `v` of graph `g`.
@@ -916,8 +916,8 @@ defmodule Graph do
       1
   """
   def in_degree(%__MODULE__{} = g, v) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
-         {:ok, v_in} <- Graph.Impl.find_in_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
+         {:ok, v_in} <- Graph.Directed.find_in_edges(g, v_id) do
       MapSet.size(v_in)
     else
       _ -> 0
@@ -937,8 +937,8 @@ defmodule Graph do
   """
   @spec out_degree(t, vertex) :: non_neg_integer
   def out_degree(%__MODULE__{} = g, v) do
-    with {:ok, v_id}  <- Graph.Impl.find_vertex_id(g, v),
-         {:ok, v_out} <- Graph.Impl.find_out_edges(g, v_id) do
+    with {:ok, v_id}  <- Graph.Utils.find_vertex_id(g, v),
+         {:ok, v_out} <- Graph.Directed.find_out_edges(g, v_id) do
       MapSet.size(v_out)
     else
       _ -> 0
@@ -950,8 +950,8 @@ defmodule Graph do
   """
   @spec in_neighbors(t, vertex) :: [vertex]
   def in_neighbors(%Graph{ids: ids} = g, v) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
-         {:ok, v_in} <- Graph.Impl.find_in_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
+         {:ok, v_in} <- Graph.Directed.find_in_edges(g, v_id) do
       Enum.map(v_in, &Map.get(ids, &1))
     else
       _ -> []
@@ -963,8 +963,8 @@ defmodule Graph do
   """
   @spec in_edges(t, vertex) :: Edge.t
   def in_edges(%__MODULE__{ids: ids, edges_meta: em} = g, v) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
-         {:ok, v_in} <- Graph.Impl.find_in_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
+         {:ok, v_in} <- Graph.Directed.find_in_edges(g, v_id) do
       Enum.map(v_in, fn id ->
         v2 = Map.get(ids, id)
         meta = Map.get(em, {id, v_id}, [])
@@ -980,8 +980,8 @@ defmodule Graph do
   """
   @spec out_neighbors(t, vertex) :: [vertex]
   def out_neighbors(%__MODULE__{ids: ids} = g, v) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
-         {:ok, v_out} <- Graph.Impl.find_out_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
+         {:ok, v_out} <- Graph.Directed.find_out_edges(g, v_id) do
       Enum.map(v_out, &Map.get(ids, &1))
     else
       _ -> []
@@ -993,8 +993,8 @@ defmodule Graph do
   """
   @spec out_edges(t, vertex) :: Edge.t
   def out_edges(%__MODULE__{ids: ids, edges_meta: es_meta} = g, v) do
-    with {:ok, v_id} <- Graph.Impl.find_vertex_id(g, v),
-         {:ok, v_out} <- Graph.Impl.find_out_edges(g, v_id) do
+    with {:ok, v_id} <- Graph.Utils.find_vertex_id(g, v),
+         {:ok, v_out} <- Graph.Directed.find_out_edges(g, v_id) do
       Enum.map(v_out, fn id ->
         v2 = Map.get(ids, id)
         meta = Map.get(es_meta, {v_id, id}, [])

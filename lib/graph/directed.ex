@@ -1,27 +1,11 @@
-defmodule Graph.Impl do
+defmodule Graph.Directed do
   @moduledoc false
-  @compile {:inline, [find_vertex_id: 2,
-                      find_out_edges: 2,
+  @compile {:inline, [find_out_edges: 2,
                       find_in_edges: 2,
                       in_neighbors: 2,
                       in_neighbors: 3,
                       out_neighbors: 2,
-                      out_neighbors: 3,
-                      edge_weight: 3]}
-
-  def edge_weight(%Graph{edges_meta: em}, a, b) do
-    case Map.get(em, {a, b}) do
-      %{weight: w} -> w
-      _ -> 0
-    end
-  end
-
-  def find_vertex_id(%Graph{vertices: vs}, v) do
-    case Map.get(vs, v) do
-      nil  -> nil
-      v_id -> {:ok, v_id}
-    end
-  end
+                      out_neighbors: 3]}
 
   def find_out_edges(%Graph{out_edges: oe}, v_id) do
     case Map.get(oe, v_id) do
