@@ -75,6 +75,45 @@ defmodule Graph do
   end
 
   @doc """
+  Converts the given Graph to DOT format, which can then be converted to
+  a number of other formats via Graphviz, e.g. `dot -Tpng out.dot > out.png`.
+
+  If labels are set on a vertex, then those labels are used in the DOT output
+  in place of the vertex itself. If no labels were set, then the vertex is
+  stringified if it's a primitive type and inspected if it's not, in which
+  case the inspect output will be quoted and used as the vertex label in the DOT file.
+
+  Edge labels and weights will be shown as attributes on the edge definitions, otherwise
+  they use the same labelling scheme for the involved vertices as described above.
+
+  NOTE: Currently this function assumes graphs are directed graphs, but in the future
+  it will support undirected graphs as well.
+
+  ## Example
+
+      > g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      > g = Graph.add_edges([{:a, :b}, {:b, :c}, {:b, :d}, {:c, :d}])
+      > g = Graph.label_vertex(g, :a, :start)
+      > g = Graph.label_vertex(g, :d, :finish)
+      > g = Graph.update_edge(g, :b, :d, weight: 3)
+      > IO.puts(Graph.to_dot(g))
+      strict digraph {
+          start
+          b
+          c
+          finish
+          start -> b
+          b -> c
+          b -> finish [weight=3]
+          c -> finish
+      }
+  """
+  @spec to_dot(t) :: {:ok, binary} | {:error, term}
+  def to_dot(%__MODULE__{} = g) do
+    Graph.Serializers.DOT.serialize(g)
+  end
+
+  @doc """
   Returns the number of edges in the graph
 
   ## Example
