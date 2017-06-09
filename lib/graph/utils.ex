@@ -1,6 +1,7 @@
 defmodule Graph.Utils do
   @moduledoc false
-  @compile {:inline, [find_vertex_id: 2,
+  @compile {:inline, [vertex_id: 1,
+                      find_vertex: 2,
                       edge_weight: 3]}
 
   @binary_heap_limit 64
@@ -79,10 +80,13 @@ defmodule Graph.Utils do
     end
   end
 
-  def find_vertex_id(%Graph{vertices: vs}, v) do
-    case Map.get(vs, v) do
-      nil  -> nil
-      v_id -> {:ok, v_id}
+  @max_phash 4_294_967_296 # 2^32
+  def vertex_id(v), do: :erlang.phash2(v, @max_phash)
+
+  def find_vertex(%Graph{vertices: vs}, v) do
+    case Map.get(vs, vertex_id(v)) do
+      nil -> nil
+      v   -> {:ok, v}
     end
   end
 end

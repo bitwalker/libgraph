@@ -1,12 +1,12 @@
 defmodule Graph.Reducer do
   @moduledoc false
 
-  def walk(%Graph{out_edges: oe, ids: ids} = g, acc, fun, opts) when is_function(fun, 4) do
+  def walk(%Graph{out_edges: oe, vertices: vs} = g, acc, fun, opts) when is_function(fun, 4) do
     case Keyword.get(opts, :algorithm, :depth_first) do
       :depth_first ->
-        visit_dfs(Map.keys(ids), g, MapSet.new, fun, acc)
+        visit_dfs(Map.keys(vs), g, MapSet.new, fun, acc)
       :breadth_first ->
-        case Map.keys(ids) do
+        case Map.keys(vs) do
           [] -> acc
           [starting_id|rest] ->
             starting_out = Map.get(oe, starting_id, MapSet.new)
@@ -17,11 +17,11 @@ defmodule Graph.Reducer do
     end
   end
 
-  defp visit_dfs([v_id|rest], %Graph{out_edges: oe, ids: ids} = g, visited, fun, acc) do
+  defp visit_dfs([v_id|rest], %Graph{out_edges: oe, vertices: vs} = g, visited, fun, acc) do
     if MapSet.member?(visited, v_id) do
       visit_dfs(rest, g, visited, fun, acc)
     else
-      v = Map.get(ids, v_id)
+      v = Map.get(vs, v_id)
       out_neighbors = Graph.out_edges(g, v)
       in_neighbors = Graph.in_edges(g, v)
       case fun.(v, out_neighbors, in_neighbors, acc) do
@@ -30,7 +30,7 @@ defmodule Graph.Reducer do
           out = oe |> Map.get(v_id, MapSet.new) |> MapSet.to_list
           visit_dfs(out ++ rest, g, visited, fun, acc2)
         {:next, v_next, acc2} ->
-          v_next_id = Map.get(ids, v_next)
+          v_next_id = Map.get(vs, v_next)
           visited = visited |> MapSet.put(v_id) |> MapSet.delete(v_next_id)
           visit_dfs([v_next_id | rest], g, visited, fun, acc2)
         {:skip, acc2} ->
@@ -46,13 +46,13 @@ defmodule Graph.Reducer do
     acc
   end
 
-  def visit_bfs(q, vs, %Graph{out_edges: oe, ids: ids} = g, visited, fun, acc) do
+  def visit_bfs(q, vs, %Graph{out_edges: oe, vertices: vertices} = g, visited, fun, acc) do
     case {:queue.out(q), vs} do
       {{{:value, v_id}, q1}, _vs} ->
         if MapSet.member?(visited, v_id) do
           visit_bfs(q1, vs, g, visited, fun, acc)
         else
-          v = Map.get(ids, v_id)
+          v = Map.get(vertices, v_id)
           out_neighbors = Graph.out_edges(g, v)
           in_neighbors = Graph.in_edges(g, v)
           case fun.(v, out_neighbors, in_neighbors, acc) do
@@ -62,7 +62,7 @@ defmodule Graph.Reducer do
               q2 = v_out |> MapSet.to_list |> List.foldl(q1, fn vid, q -> :queue.in(vid, q) end)
               visit_bfs(q2, vs, g, visited, fun, acc2)
             {:next, v_next, acc2} ->
-              v_next_id = Map.get(ids, v_next)
+              v_next_id = Map.get(vertices, v_next)
               visited = visited |> MapSet.put(v_id) |> MapSet.delete(v_next_id)
               q2 = :queue.in_r(v_next_id, q1)
               visit_bfs(q2, vs, g, visited, fun, acc2)

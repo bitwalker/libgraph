@@ -2,6 +2,7 @@ defmodule GraphTest do
   use ExUnit.Case
   doctest Graph
   alias Graph.Edge
+  alias Graph.Test.Generators
 
   test "get info about graph" do
     g = build_basic_cyclic_graph()
@@ -76,6 +77,25 @@ defmodule GraphTest do
     g = build_basic_cyclic_graph()
 
     assert [:a, :b, :d, :e] = Graph.get_shortest_path(g, :a, :e)
+  end
+
+  test "shortest path is correct" do
+    g = Generators.dag(1_000)
+    dg = Generators.libgraph_to_digraph(g)
+
+    paths = Graph.get_paths(g, 1, 1_000)
+
+    shortest_g = Graph.dijkstra(g, 1, 1_000)
+    shortest_dg = :digraph.get_short_path(dg, 1, 1_000)
+    assert is_list(shortest_g)
+    assert is_list(shortest_dg)
+
+    assert is_list(paths)
+    [shortest|_] = Enum.sort_by(paths, &length/1)
+    shortest_len = length(shortest)
+
+    assert ^shortest_len = length(shortest_dg)
+    assert ^shortest_len = length(shortest_g)
   end
 
   test "out_edges" do

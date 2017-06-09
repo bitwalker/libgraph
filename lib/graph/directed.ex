@@ -7,6 +7,8 @@ defmodule Graph.Directed do
                       out_neighbors: 2,
                       out_neighbors: 3]}
 
+  import Graph.Utils, only: [vertex_id: 1]
+
   def find_out_edges(%Graph{out_edges: oe}, v_id) do
     case Map.get(oe, v_id) do
       nil -> nil
@@ -21,26 +23,26 @@ defmodule Graph.Directed do
     end
   end
 
-  def topsort(%Graph{ids: ids} = g) do
+  def topsort(%Graph{vertices: vs} = g) do
     l = reverse_postorder(g)
-    if length(forest(g, &in_neighbors/3, l)) == map_size(ids) do
-      Enum.map(l, &Map.get(ids, &1))
+    if length(forest(g, &in_neighbors/3, l)) == map_size(vs) do
+      Enum.map(l, &Map.get(vs, &1))
     else
       false
     end
   end
 
-  def preorder(%Graph{ids: ids} = g) do
+  def preorder(%Graph{vertices: vs} = g) do
     g
     |> reverse_preorder()
-    |> Stream.map(fn id -> Map.get(ids, id) end)
+    |> Stream.map(fn id -> Map.get(vs, id) end)
     |> Enum.reverse
   end
 
-  def postorder(%Graph{ids: ids} = g) do
+  def postorder(%Graph{vertices: vs} = g) do
     g
     |> reverse_postorder()
-    |> Stream.map(fn id -> Map.get(ids, id) end)
+    |> Stream.map(fn id -> Map.get(vs, id) end)
     |> Enum.reverse
   end
 
@@ -48,9 +50,9 @@ defmodule Graph.Directed do
     arborescence_root(g) != nil
   end
 
-  def arborescence_root(%Graph{ids: ids} = g) do
+  def arborescence_root(%Graph{vertices: vs} = g) do
     if Graph.num_edges(g) == (Graph.num_vertices(g) - 1) do
-      [root] = Enum.reduce(ids, [], fn {v_id, v}, acc ->
+      [root] = Enum.reduce(vs, [], fn {v_id, v}, acc ->
         case length(in_neighbors(g, v_id)) do
           1 -> acc
           0 when acc == [] -> [v]
@@ -66,46 +68,55 @@ defmodule Graph.Directed do
   end
 
   def is_acyclic?(%Graph{} = g) do
-    loop_vertices_w_ids(g) == [] and topsort(g) != false
+    has_loops?(g) == false and topsort(g) != false
   end
 
-  def loop_vertices(%Graph{ids: ids} = g) do
-    for id <- loop_vertices_w_ids(g), do: Map.get(ids, id)
-  end
-  defp loop_vertices_w_ids(%Graph{ids: ids} = g) do
-    for v <- Map.keys(ids), is_reflexive_vertex(g, v), do: v
+  def has_loops?(%Graph{vertices: vs} = g) do
+    for {v_id, _} <- vs do
+      if is_reflexive_vertex(g, v_id) do
+        throw :has_loop
+      end
+    end
+    false
+  catch
+    _, :has_loop ->
+      true
   end
 
-  def components(%Graph{ids: ids} = g) do
+  def loop_vertices(%Graph{vertices: vs} = g) do
+    for {v_id, v} <- vs, is_reflexive_vertex(g, v_id), do: v
+  end
+
+  def components(%Graph{vertices: vs} = g) do
     for component <- forest(g, &inout/3) do
-      for id <- component, do: Map.get(ids, id)
+      for id <- component, do: Map.get(vs, id)
     end
   end
 
-  def strong_components(%Graph{ids: ids} = g) do
+  def strong_components(%Graph{vertices: vs} = g) do
     for component <- forest(g, &in_neighbors/3, reverse_postorder(g)) do
-      for id <- component, do: Map.get(ids, id)
+      for id <- component, do: Map.get(vs, id)
     end
   end
 
-  def reachable(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &Map.get(vertices, &1))
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(ids, id)
+  def reachable(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &vertex_id/1)
+    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(vertices, id)
   end
 
-  def reachable_neighbors(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &Map.get(vertices, &1))
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
+  def reachable_neighbors(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &vertex_id/1)
+    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)), do: Map.get(vertices, id)
   end
 
-  def reaching(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &Map.get(vertices, &1))
-    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(ids, id)
+  def reaching(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &vertex_id/1)
+    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(vertices, id)
   end
 
-  def reaching_neighbors(%Graph{vertices: vertices, ids: ids} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &Map.get(vertices, &1))
-    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(ids, id)
+  def reaching_neighbors(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
+    vs = Enum.map(vs, &vertex_id/1)
+    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(vertices, id)
   end
 
   def in_neighbors(%Graph{} = g, v, []) do
@@ -146,8 +157,8 @@ defmodule Graph.Directed do
     Enum.member?(out_neighbors(g, v), v)
   end
 
-  defp forest(%Graph{ids: ids} = g, fun) do
-    forest(g, fun, Map.keys(ids))
+  defp forest(%Graph{vertices: vs} = g, fun) do
+    forest(g, fun, Map.keys(vs))
   end
 
   defp forest(g, fun, vs) do
@@ -187,8 +198,8 @@ defmodule Graph.Directed do
     :lists.append(forest(g, &out_neighbors/3))
   end
 
-  defp reverse_postorder(%Graph{ids: ids} = g) do
-    {_, l} = posttraverse(Map.keys(ids), g, MapSet.new, [])
+  defp reverse_postorder(%Graph{vertices: vs} = g) do
+    {_, l} = posttraverse(Map.keys(vs), g, MapSet.new, [])
     l
   end
 

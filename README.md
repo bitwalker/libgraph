@@ -7,7 +7,9 @@
 
 ## About
 
-This library provides an alternative directed graph implementation (i.e. replaces `:digraph`).
+This library provides an alternative directed graph implementation (i.e. replaces `:digraph`), a priority
+queue implementation (designed for use with graphs, as it prioritizes low integer values over high), and
+eventually an undirected graph implementation.
 
 I created this library because one of my current projects has a need for doing processing on large
 numbers of graphs concurrently. As `:digraph` requires a minimum of 3 ETS tables per graph, and up to 6
@@ -26,6 +28,10 @@ reflect your use case. That said, *please* let me know if you find any pathologi
 library, as I would like to ensure that as much as possible, `libgraph` either matches the performance of `:digraph`,
 or exceeds it.
 
+NOTE: While this library is primarily focused on the `Graph` data structure it defines, it also contains an implementation
+of a priority queue (you can find it under the `PriorityQueue` module), designed for use with graphs specifically, as it
+considers lower integer values higher priority, which is perfect for the kinds of graph algorithms you need a priority queue for.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
@@ -33,7 +39,7 @@ by adding `libgraph` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:libgraph, "~> 0.3"}]
+  [{:libgraph, "~> 0.5"}]
 end
 ```
 

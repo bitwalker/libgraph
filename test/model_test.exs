@@ -15,7 +15,7 @@ defmodule Graph.Model.Test do
   end
 
   property "a topsort of a DAG is correct if each element only has edges pointing to subsequent elements", [max_size: 1_000] do
-    forall %Graph{vertices: vs, out_edges: oe, ids: ids} = g <- dag() do
+    forall %Graph{vertices: vs, out_edges: oe} = g <- dag() do
       sorted = Graph.topsort(g)
       case sorted do
         false ->
@@ -25,9 +25,9 @@ defmodule Graph.Model.Test do
             _, {_, false} = res ->
               res
             v, {visited, _} ->
-              v_id = Map.get(vs, v)
+              v_id = Graph.Utils.vertex_id(v)
               edges = Map.get(oe, v_id, MapSet.new)
-              backreferences? = Enum.any?(edges, fn e -> Enum.member?(visited, Map.get(ids, e)) end)
+              backreferences? = Enum.any?(edges, fn e -> Enum.member?(visited, Map.get(vs, e)) end)
               {[v|visited], not backreferences?}
           end)
           correct?
