@@ -1,5 +1,5 @@
 defmodule GraphTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest Graph
   alias Graph.Edge
   alias Graph.Test.Generators
