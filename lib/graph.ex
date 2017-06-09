@@ -44,8 +44,16 @@ defmodule Graph do
 
   alias Graph.Edge
 
-  @opaque t :: %__MODULE__{}
+  @type vertex_id :: non_neg_integer
   @type vertex :: term
+  @type t :: %__MODULE__{
+    in_edges: %{vertex_id => MapSet.t},
+    out_edges: %{vertex_id => MapSet.t},
+    edges_meta: %{{vertex_id, vertex_id} => map},
+    vertex_labels: %{vertex_id => term},
+    vertices: %{vertex_id => vertex}
+  }
+
   @doc """
   Creates a new graph.
   """
