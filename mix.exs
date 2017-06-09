@@ -3,13 +3,13 @@ defmodule Graph.Mixfile do
 
   def project do
     [app: :libgraph,
-     version: "0.4.1",
+     version: "0.5.0",
      elixir: "~> 1.4 or >= 1.3.3",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps(),
      elixirc_paths: elixirc_paths(Mix.env),
-     description: "A pure Elixir implementation of a directed graph data structure",
+     description: "A high-performance graph datastructure library for Elixir projects",
      package: package()]
   end
 
