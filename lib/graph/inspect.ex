@@ -29,9 +29,8 @@ defimpl Inspect, for: Graph do
   end
   # For large graphs, just print summary information about the graph
   def inspect(%Graph{} = g, _opts) do
-    %{num_vertices: num_vertices,
-      num_edges: num_edges,
-      size_in_bytes: size_in_bytes} = Graph.info(g)
-    "#Graph<num_vertices: #{num_vertices}, num_edges: #{num_edges}, size_in_bytes: #{size_in_bytes}>"
+    num_vertices = Graph.num_vertices(g)
+    num_edges = Graph.num_edges(g)
+    "#Graph<num_vertices: #{num_vertices}, num_edges: #{num_edges}>"
   end
 end
