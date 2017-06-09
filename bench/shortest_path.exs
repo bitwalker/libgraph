@@ -1,6 +1,6 @@
-Code.require_file(Path.join([__DIR__, "support", "generators.ex"]))
+Code.require_file(Path.join([__DIR__, "..", "test", "support", "generators.ex"]))
 
-alias Graph.Bench.Generators
+alias Graph.Test.Generators
 
 g = Generators.dag(10_000)
 dg = Generators.libgraph_to_digraph(g)

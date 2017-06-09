@@ -8,9 +8,13 @@ defmodule Graph.Mixfile do
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps(),
+     elixirc_paths: elixirc_paths(Mix.env),
      description: "A pure Elixir implementation of a directed graph data structure",
      package: package()]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_),     do: ["lib"]
 
   # Configuration for the OTP application
   #
