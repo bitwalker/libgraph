@@ -346,6 +346,15 @@ defmodule Graph do
   end
 
   @doc """
+  Returns true if the given vertex exists in the graph. Otherwise false.
+  """
+  @spec has_vertex?(t, vertex) :: boolean
+  def has_vertex?(%__MODULE__{vertices: vs}, v) do
+    v_id = Graph.Utils.vertex_id(v)
+    Map.has_key?(vs, v_id)
+  end
+
+  @doc """
   Returns the label for the given vertex.
   If no label was assigned, it returns nil.
 
