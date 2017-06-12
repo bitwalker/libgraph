@@ -1,16 +1,12 @@
 defmodule PriorityQueue do
   @moduledoc """
-  This module defines a priority queue datastructure, which uses a min heap structure to support pulling
-  the values with the lowest priority out first. This is optimized for use with graph search algorithms where
-  the smallest in/out degree or lowest edge weight/cost should be evaluated before those with higher values.
-  Values with the same priority are dequeued in the order they were originally queued.
+  This module defines a priority queue datastructure, intended for use with graphs, as it prioritizes
+  lower priority values over higher priority values (ideal for priorities based on edge weights, etc.).
 
-  This implementation exploits the fact that tuple access times are extremely fast, by storing priorities as
-  buckets of `{priority, :queue.t()}`, and nesting them such that the lowest priority is always on the left,
-  e.g. `{{1, :queue.t()}, {{3, :queue.t()}, nil}}`. We use `nil` to mark that there have been no priorities defined
-  greater than the one on the left, and is where we insert new largest priorities. Inserting a new priority in the
-  middle is just a matter of recursively navigating the heap until we reach the tuple where the left hand is less than
-  the priority we're inserting, and the right hand is greater, and creating a new nested tuple on the right.
+  This implementation makes use of `:gb_trees` under the covers. It is also very fast, even for a very large
+  number of distinct priorities. Other priority queue implementations I've looked at are either slow when working
+  with large numbers of priorities, or restrict themselves to a specific number of allowed priorities, which is
+  why I've ended up writing my own.
   """
   defstruct priorities: nil
 
@@ -38,15 +34,42 @@ defmodule PriorityQueue do
       {:value, :foo}
   """
   @spec push(t, term, integer) :: t
-  def push(%__MODULE__{priorities: nil} = q, term, priority) when is_integer(priority) do
-    %__MODULE__{q | priorities: {new_priority(priority, term), nil}}
+  def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority) when is_integer(priority) and size > 0 do
+    case :gb_trees.lookup(priority, tree) do
+      :none ->
+        %__MODULE__{pq | priorities: :gb_trees.insert(priority, :queue.in(term, :queue.new), tree)}
+      {:value, q} ->
+        %__MODULE__{pq | priorities: :gb_trees.update(priority, :queue.in(term, q), tree)}
+    end
   end
-  # Optimize single priority
-  def push(%__MODULE__{priorities: {{min_pri, pq}, nil}} = q, term, min_pri) when is_integer(min_pri) do
-    %__MODULE__{q | priorities: {{min_pri, :queue.in(term, pq)}, nil}}
+  def push(%__MODULE__{priorities: {0, _} = tree} = pq, term, priority) when is_integer(priority) do
+    %__MODULE__{pq | priorities: :gb_trees.insert(priority, :queue.in(term, :queue.new), tree)}
   end
-  def push(%__MODULE__{priorities: ps} = q, term, priority) when is_integer(priority) and is_tuple(ps) do
-    %__MODULE__{q | priorities: add_to_priority(ps, priority, term)}
+  def push(%__MODULE__{priorities: nil} = pq, term, priority) when is_integer(priority) do
+    %__MODULE__{pq | priorities: :gb_trees.insert(priority, :queue.in(term, :queue.new), :gb_trees.empty)}
+  end
+
+  @doc """
+  This function returns the value at the top of the queue. If the queue is empty, `:empty`
+  is returned, otherwise `{:value, term}`. This function does not modify the queue.
+
+  ## Example
+
+      iex> pq = PriorityQueue.new |> PriorityQueue.push(:foo, 1)
+      ...> {:value, :foo} = PriorityQueue.peek(pq)
+      ...> {{:value, val}, _} = PriorityQueue.pop(pq)
+      ...> val
+      :foo
+  """
+  @spec peek(t) :: :empty | {:value, term}
+  def peek(%__MODULE__{priorities: {size, {_min_pri, q, _, _}}}) when size > 0 do
+    case :queue.out(q) do
+      {:empty, _} -> :empty
+      {{:value, _} = val, _} -> val
+    end
+  end
+  def peek(%__MODULE__{priorities: _}) do
+    :empty
   end
 
   @doc """
@@ -72,51 +95,37 @@ defmodule PriorityQueue do
       :empty
   """
   @spec pop(t) :: {:empty, t} | {{:value, term}, t}
-  def pop(%__MODULE__{priorities: nil} = q) do
-    {:empty, q}
-  end
-  def pop(%__MODULE__{priorities: ps} = q) when is_tuple(ps) do
-    case extract_min(ps) do
-      {:empty, ps1} ->
-        {:empty, %__MODULE__{q | priorities: ps1}}
-      {{:value, _} = val, ps1} ->
-        {val, %__MODULE__{q | priorities: ps1}}
+  def pop(%__MODULE__{priorities: {size, _} = tree} = pq) when size > 0 do
+    {min_pri, q, tree2} = :gb_trees.take_smallest(tree)
+    case :queue.out(q) do
+      {:empty, _} ->
+        pop(%__MODULE__{pq | priorities: tree2})
+      {{:value, _} = val, q2} ->
+        {val, %__MODULE__{pq | priorities: :gb_trees.update(min_pri, q2, tree)}}
     end
   end
-
-  ## Private
-
-  defp new_priority(priority, term) do
-    {priority, :queue.in(term, :queue.new)}
+  def pop(%__MODULE__{priorities: _} = pq) do
+    {:empty, pq}
   end
 
-  defp add_to_priority({{priority, pq}, next_p}, priority, term) do
-    {{priority, :queue.in(term, pq)}, next_p}
-  end
-  defp add_to_priority({{last_priority, _} = last, nil}, priority, term) when priority > last_priority do
-    {last, {new_priority(priority, term), nil}}
-  end
-  defp add_to_priority({{last_priority, _} = last, next_p}, priority, term) when priority > last_priority do
-    {last, add_to_priority(next_p, priority, term)}
-  end
-  defp add_to_priority({{last_priority, _}, _} = next, priority, term) when priority < last_priority do
-    {new_priority(priority, term), next}
-  end
-
-  defp extract_min({{priority, pq}, nil}) do
-    case :queue.out(pq) do
-      {:empty, _pq1} ->
-        {:empty, nil}
-      {{:value, _} = res, pq1} ->
-        {res, {{priority, pq1}, nil}}
+  defimpl Inspect do
+    def inspect(pq, %{structs: false} = opts) do
+      Inspect.Algebra.to_doc(pq, opts)
     end
-  end
-  defp extract_min({{priority, pq}, next}) do
-    case :queue.out(pq) do
-      {:empty, _pq1} ->
-        extract_min(next)
-      {{:value, _} = res, pq1} ->
-        {res, {{priority, pq1}, next}}
+
+    def inspect(%PriorityQueue{priorities: {size, _} = tree}, opts) when size > 0 do
+      items =
+        tree
+        |> :gb_trees.to_list
+        |> Enum.flat_map(fn {_priority, q} -> :queue.to_list(q) end)
+      count =
+        Enum.count(items)
+      doc =
+        Inspect.Algebra.to_doc(items, opts)
+      Inspect.Algebra.concat(["#PriorityQueue<size: #{count}, queue: ", doc, ">"])
+    end
+    def inspect(%PriorityQueue{}, _opts) do
+      "#PriorityQueue<size: 0, queue: []>"
     end
   end
 end
