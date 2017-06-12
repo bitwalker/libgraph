@@ -21,7 +21,7 @@ Benchee.run(opts, %{
       end,
       "libgraph (a_star)" => fn {g, _} ->
         length(Graph.a_star(g, 1, 1_000, fn v ->
-              case Graph.label(g, v) do
+              case Graph.vertex_label(g, v) do
                 nil -> 1_000
                 hint -> hint
               end
