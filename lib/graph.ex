@@ -774,6 +774,8 @@ defmodule Graph do
     Enum.reduce(es, g, fn
       {v1, v2}, acc ->
         delete_edge(acc, v1, v2)
+      %Edge{v1: v1, v2: v2}, acc ->
+        delete_edge(acc, v1, v2)
       bad_edge, _acc ->
         throw {:error, {:invalid_edge, bad_edge}}
     end)
