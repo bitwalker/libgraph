@@ -2,7 +2,6 @@ defmodule Graph.Pathfinding do
   @moduledoc """
   This module contains implementation code for path finding algorithms used by `libgraph`.
   """
-  import Graph.Directed, only: [find_out_edges: 2]
   import Graph.Utils, only: [vertex_id: 1, edge_weight: 3]
 
   @doc """
@@ -30,10 +29,10 @@ defmodule Graph.Pathfinding do
   always returns 0, and thus the next vertex is chosen based on the weight of
   the edge between it and the current vertex.
   """
-  def a_star(%Graph{vertices: vs} = g, a, b, hfun) when is_function(hfun, 1) do
+  def a_star(%Graph{vertices: vs, out_edges: oe} = g, a, b, hfun) when is_function(hfun, 1) do
     with a_id  <- vertex_id(a),
          b_id  <- vertex_id(b),
-         {:ok, a_out} <- find_out_edges(g, a_id) do
+         {:ok, a_out} <- Map.fetch(oe, a_id) do
       tree = Graph.new |> Graph.add_vertex(a_id)
       q = PriorityQueue.new
       q =
@@ -55,10 +54,10 @@ defmodule Graph.Pathfinding do
   Finds all paths between `a` and `b`, each path as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  def all(%Graph{vertices: vs} = g, a, b) do
+  def all(%Graph{vertices: vs, out_edges: oe} = g, a, b) do
     with a_id  <- vertex_id(a),
          b_id  <- vertex_id(b),
-         {:ok, a_out} <- find_out_edges(g, a_id) do
+         {:ok, a_out} <- Map.fetch(oe, a_id) do
       case dfs(g, a_out, b_id, [a_id], []) do
         nil ->
           []

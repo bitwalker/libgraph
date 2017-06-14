@@ -73,11 +73,10 @@ defmodule Graph.Utils do
     sizeof_tuple(term, i+1, n, size+sizeof_term(:erlang.element(i, term)))
   end
 
-  def edge_weight(%Graph{edges_meta: em}, a, b) do
-    case Map.get(em, {a, b}) do
-      %{weight: w} -> w
-      _ -> 0
-    end
+  def edge_weight(%Graph{edges: meta}, a, b) do
+    Map.fetch!(meta, {a, b})
+    |> Enum.map(fn {_label, weight} -> weight end)
+    |> Enum.min
   end
 
   @max_phash 4_294_967_296 # 2^32

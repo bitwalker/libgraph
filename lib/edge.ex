@@ -56,38 +56,27 @@ defmodule Graph.Edge do
 
   @doc false
   def options_to_meta(opts) when is_list(opts) do
-    case Keyword.split(opts, [:weight, :label]) do
-      {[], _} -> nil
-      {valid_opts, _} ->
-        case Map.new(valid_opts) do
-          %{weight: w} = meta when is_integer(w) ->
-            meta
-          %{weight: w} ->
-            throw {:error, {:invalid_edge_option}, {:weight, w}}
-          meta ->
-            meta
-        end
+    label = Keyword.get(opts, :label)
+    weight = Keyword.get(opts, :weight, 1)
+    case {label, weight} do
+      {_, w} = meta when is_integer(w) ->
+        meta
+      {_, w} ->
+        throw {:error, {:invalid_edge_option, {:weight, w}}}
     end
   end
   def options_to_meta(opts) when is_map(opts) do
-    case {Map.get(opts, :weight), Map.get(opts, :label)} do
-      {nil, nil} ->
-        nil
-      {nil, l} ->
-        %{label: l}
-      {w, nil} when is_integer(w) ->
-        %{weight: w}
-      {w, l} when is_integer(w) ->
-        %{weight: w, label: l}
-      {w, _} ->
+    label = Map.get(opts, :label)
+    weight = Map.get(opts, :weight, 1)
+    case {label, weight} do
+      {_, w} = meta when is_integer(w) ->
+        meta
+      {_, w} ->
         throw {:error, {:invalid_edge_option, {:weight, w}}}
     end
   end
   def options_to_meta(nil), do: nil
 
   @doc false
-  def to_meta(%__MODULE__{weight: 1, label: nil}), do: nil
-  def to_meta(%__MODULE__{weight: weight, label: nil}), do: %{weight: weight}
-  def to_meta(%__MODULE__{weight: 1, label: label}), do: %{label: label}
-  def to_meta(%__MODULE__{weight: weight, label: label}), do: %{weight: weight, label: label}
+  def to_meta(%__MODULE__{label: label, weight: weight}), do: {label, weight}
 end

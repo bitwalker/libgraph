@@ -1,27 +1,11 @@
 defmodule Graph.Directed do
   @moduledoc false
-  @compile {:inline, [find_out_edges: 2,
-                      find_in_edges: 2,
-                      in_neighbors: 2,
+  @compile {:inline, [in_neighbors: 2,
                       in_neighbors: 3,
                       out_neighbors: 2,
                       out_neighbors: 3]}
 
   import Graph.Utils, only: [vertex_id: 1]
-
-  def find_out_edges(%Graph{out_edges: oe}, v_id) do
-    case Map.get(oe, v_id) do
-      nil -> nil
-      v_out -> {:ok, v_out}
-    end
-  end
-
-  def find_in_edges(%Graph{in_edges: ie}, v_id) do
-    case Map.get(ie, v_id) do
-      nil -> nil
-      v_in -> {:ok, v_in}
-    end
-  end
 
   def topsort(%Graph{vertices: vs} = g) do
     l = reverse_postorder(g)
@@ -50,8 +34,10 @@ defmodule Graph.Directed do
     arborescence_root(g) != nil
   end
 
-  def arborescence_root(%Graph{vertices: vs} = g) do
-    if Graph.num_edges(g) == (Graph.num_vertices(g) - 1) do
+  def arborescence_root(%Graph{vertices: vs, out_edges: oe} = g) do
+    num_edges = Enum.reduce(oe, 0, fn {_, out}, sum -> sum + MapSet.size(out) end)
+    num_vertices = map_size(vs)
+    if num_edges == (num_vertices - 1) do
       [root] = Enum.reduce(vs, [], fn {v_id, v}, acc ->
         case length(in_neighbors(g, v_id)) do
           1 -> acc

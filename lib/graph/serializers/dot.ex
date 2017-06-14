@@ -44,22 +44,20 @@ defmodule Graph.Serializers.DOT do
     escape_quotes(rest, <<acc::binary, ?\\, ?\">>)
   end
 
-  defp serialize_edges(%Graph{vertices: vertices, out_edges: oe, edges_meta: em} = g) do
+  defp serialize_edges(%Graph{vertices: vertices, out_edges: oe, edges: em} = g) do
     edges = Enum.reduce(vertices, [], fn {id, v}, acc ->
       v_label = get_vertex_label(g, id, v)
       edges =
         oe
         |> Map.get(id, MapSet.new)
-        |> Enum.map(fn id2 ->
+        |> Enum.flat_map(fn id2 ->
           v2_label = get_vertex_label(g, id2, Map.get(vertices, id2))
-          case Map.get(em, {id, id2}) do
-            %{weight: w, label: label} ->
-              {v_label, v2_label, w, encode_label(label)}
-            %{weight: w} ->
-              {v_label, v2_label, w}
-            _ ->
-              {v_label, v2_label}
-          end
+          Enum.map(Map.fetch!(em, {id, id2}), fn
+            {nil, weight} ->
+              {v_label, v2_label, weight}
+            {label, weight} ->
+              {v_label, v2_label, weight, encode_label(label)}
+          end)
         end)
       case edges do
         [] -> acc
@@ -71,8 +69,6 @@ defmodule Graph.Serializers.DOT do
         acc <> indent(1) <> v_label <> " -> " <> v2_label <> " [" <> "label=#{edge_label}; weight=#{weight}" <> "]\n"
       {v_label, v2_label, weight}, acc ->
         acc <> indent(1) <> v_label <> " -> " <> v2_label <> " [" <> "weight=#{weight}" <> "]\n"
-      {v_label, v2_label}, acc ->
-        acc <> indent(1) <> v_label <> " -> " <> v2_label <> "\n"
     end)
   end
 
