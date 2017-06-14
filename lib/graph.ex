@@ -3,38 +3,27 @@ defmodule Graph do
   This module defines a directed graph data structure, which supports both acyclic and cyclic forms.
   It also defines the API for creating, manipulating, and querying that structure.
 
-  This is intended as a replacement for `:digraph`, which requires the use of 3 ETS tables at a minimum,
-  but up to 6 at a time during certain operations (such as `get_short_path/3`). In environments where many
-  graphs are in memory at a time, this can be dangerous, as it is easy to hit the system limit for max ETS tables,
-  which will bring your node down. This graph implementation does not use ETS, so it can be used freely without
-  concern for hitting this limit.
-
   As far as memory usage is concerned, `Graph` should be fairly compact in memory, but if you want to do a rough
   comparison between the memory usage for a graph between `libgraph` and `digraph`, use `:digraph.info/1` and
-  `Graph.info/1` on the two graphs, and both contain memory usage information. Keep in mind we don't have a precise
-  way to measure the memory usage of a term in memory, whereas ETS is able to give a precise answer, but we do have
+  `Graph.info/1` on the two graphs, and both results will contain memory usage information. Keep in mind we don't have a precise
+  way to measure the memory usage of a term in memory, whereas ETS is able to give a more precise answer, but we do have
   a fairly good way to estimate the usage of a term, and we use that method within `libgraph`.
 
-  The Graph struct is composed of a map of vertex ids to vertices, a map of vertex ids to their out neighbors,
-  a map of vertex ids to their in neighbors (both in and out neighbors are represented as MapSets), a map of
-  vertex ids to vertex labels (which are only stored if a non-nil label was provided), and a map of edge ids
-  (which are a tuple of the source vertex id to destination vertex id) to a map of edge metadata (label/weight).
+  The Graph struct is structured like so:
 
-  The reason we use several different maps to represent the graph, particularly the inverse index of in/out neighbors,
-  is that it allows us to perform very efficient queries on the graph without having to store vertices multiple times,
-  it is also more efficient to use maps with small keys, particularly integers or binaries. The use of several maps does
-  mean we use more space in memory, but because the bulk of those maps are just integers, it's about as compact as we can
-  make it while still remaining performant.
+  - A map of vertex ids to vertices (`vertices`)
+  - A map of vertex ids to their out neighbors (`out_edges`),
+  - A map of vertex ids to their in neighbors (`in_edges`), effectively the transposition of `out_edges`
+  - A map of vertex ids to vertex labels (`vertex_labels`), (labels are only stored if a non-nil label was provided)
+  - A map of edge ids (where an edge id is simply a tuple of `{vertex_id, vertex_id}`) to a map of edge metadata (`edges`)
+  - Edge metadata is a map of `label => weight`, and each entry in that map represents a distinct edge. This allows
+    us to support multiple edges in the same direction between the same pair of vertices, but for many purposes simply
+    treat them as a single logical edge.
 
-  There are benchmarks provided with this library which compare it directly to `:digraph` for some common operations,
-  and thus far, `libgraph` is equal to or outperforms `:digraph` in all of them.
-
-  The only bit of data I have not yet evaluated is how much garbage is generated when querying/manipulating the graph
-  between `libgraph` and `digraph`, but I suspect the use of ETS means that `digraph` is able to keep that to a minimum.
-  Until I verify if that's the case, I would assume that `libgraph` has higher memory requirements, but better performance,
-  and is able to side-step the ETS limit. If your requirements, like mine, mean that you are dynamically constructing and querying
-  graphs concurrently, I think `libgraph` is the better choice - however if you either need the APIs of `:digraph` that I have
-  not yet implemented, or do not have the same use case, I would stick to `:digraph` for now.
+  This structure is designed to be as efficient as possible once a graph is built, but it turned out that it is also
+  quite efficient for manipulating the graph as well. For example, splitting an edge and introducing a new vertex on that
+  edge can be done with very little effort. We use vertex ids everywhere because we can generate them without any lookups,
+  we don't incur any copies of the vertex structure, and they are very efficient as keys in a map.
   """
   defstruct in_edges: %{},
             out_edges: %{},
