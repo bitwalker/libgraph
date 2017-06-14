@@ -35,7 +35,7 @@ defmodule Graph.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [{:benchee, "~> 0.8", only: :dev},
-     {:propcheck, "~> 0.0.1", only: :test},
+     {:eqc_ex, "~> 1.4", only: [:dev, :test]},
      {:ex_doc, ">= 0.0.0", only: :dev}]
   end
 

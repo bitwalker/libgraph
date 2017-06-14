@@ -1,20 +1,23 @@
 defmodule Graph.Model.Test do
   use ExUnit.Case, async: true
-  use PropCheck
+  use EQC.ExUnit
 
-  property "a directed acyclic graph (DAG) is always acyclic", [max_size: 1_000] do
+  @tag numtests: 1000
+  property "a directed acyclic graph (DAG) is always acyclic" do
     forall g <- dag() do
       Graph.is_acyclic?(g)
     end
   end
 
-  property "a directed acyclic graph (DAG) is always topologically sortable", [max_size: 1_000] do
+  @tag numtests: 1000
+  property "a directed acyclic graph (DAG) is always topologically sortable" do
     forall g <- dag() do
       Graph.topsort(g) != false
     end
   end
 
-  property "a topsort of a DAG is correct if each element only has edges pointing to subsequent elements", [max_size: 1_000] do
+  @tag numtests: 1000
+  property "a topsort of a DAG is correct if each element only has edges pointing to subsequent elements" do
     forall %Graph{vertices: vs, out_edges: oe} = g <- dag() do
       sorted = Graph.topsort(g)
       case sorted do
@@ -35,13 +38,15 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "a directed cyclic graph (DCG) is always cyclic", [max_size: 1_000] do
+  @tag numtests: 1000
+  property "a directed cyclic graph (DCG) is always cyclic" do
     forall g <- dcg() do
       Graph.is_cyclic?(g)
     end
   end
 
-  property "a directed cyclic graph (DCG) is never topologically sortable", [max_size: 1_000] do
+  @tag numtests: 1000
+  property "a directed cyclic graph (DCG) is never topologically sortable" do
     forall g <- dcg() do
       Graph.topsort(g) == false
     end
@@ -97,13 +102,15 @@ defmodule Graph.Model.Test do
 
   property "the subgraph G' of a given graph G, implies that the vertices and edges of G' form subsets of those from G (DAG)" do
     forall g <- dag() do
-      g_vertices = g |> Graph.vertices |> MapSet.new
-      g_edges = g |> Graph.edges |> MapSet.new
-      subset_vertices = g_vertices |> Enum.shuffle |> Enum.take(:rand.uniform(MapSet.size(g_vertices) - 1))
-      sg = Graph.subgraph(g, subset_vertices)
-      sg_vertices = sg |> Graph.vertices |> MapSet.new
-      sg_edges = sg |> Graph.edges |> MapSet.new
-      MapSet.subset?(sg_vertices, g_vertices) && MapSet.subset?(sg_edges, g_edges)
+      implies Graph.num_vertices(g) > 0 do
+        g_vertices = g |> Graph.vertices |> MapSet.new
+        g_edges = g |> Graph.edges |> MapSet.new
+        subset_vertices = g_vertices |> Enum.shuffle |> Enum.take(:rand.uniform(MapSet.size(g_vertices) - 1))
+        sg = Graph.subgraph(g, subset_vertices)
+        sg_vertices = sg |> Graph.vertices |> MapSet.new
+        sg_edges = sg |> Graph.edges |> MapSet.new
+        MapSet.subset?(sg_vertices, g_vertices) && MapSet.subset?(sg_edges, g_edges)
+      end
     end
   end
 
@@ -121,15 +128,17 @@ defmodule Graph.Model.Test do
 
   property "connected components of a graph are lists of vertices where exists an adirectional path between each pair of vertices" do
     forall g <- dag() do
-      components = Graph.components(g)
-      Enum.all?(components, fn
-        component when length(component) < 2 ->
-          true
-        component ->
-          for j <- component, k <- component, j != k do
-            Graph.get_shortest_path(g, j, k) != nil || Graph.get_shortest_path(g, k, j) != nil
-          end
-      end)
+      implies Graph.num_vertices(g) > 0 do
+        components = Graph.components(g)
+        Enum.all?(components, fn
+          component when length(component) < 2 ->
+            true
+          component ->
+            for j <- component, k <- component, j != k do
+              Graph.get_shortest_path(g, j, k) != nil || Graph.get_shortest_path(g, k, j) != nil
+            end
+        end)
+      end
     end
   end
 
@@ -148,12 +157,17 @@ defmodule Graph.Model.Test do
   ## Private
 
   def dag() do
-    sized(s, dag(s, Graph.new))
+    such_that g <- sized_dag() do
+      Graph.is_acyclic?(g)
+    end
   end
-  defp dag(0, g) do
+  defp sized_dag() do
+    sized s, do: sized_dag(s, Graph.new)
+  end
+  defp sized_dag(0, g) do
     g
   end
-  defp dag(i, g) do
+  defp sized_dag(i, g) do
     i = i+1
     g = Enum.reduce(0..i, g, fn v, g -> Graph.add_vertex(g, v) end)
     Enum.reduce(1..i, g, fn v, g ->
@@ -169,21 +183,25 @@ defmodule Graph.Model.Test do
     end)
   end
 
-  def dcg(), do: sized(s, dcg(s))
+  def dcg() do
+    such_that g <- sized_dcg() do
+      Graph.is_cyclic?(g)
+    end
+  end
+  defp sized_dcg() do
+    sized s, do: sized_dcg(s, Graph.new)
+  end
   # We cannot produce a "real" DCG unless we have at least 2 vertices,
   # as a single vertex DCG which has an edge to itself is still topsortable
   # and so does not hold to the property that DCGs are not topsortable
   # We are handling it this way to maintain compatibility with digraph (for now),
   # but this may change in the future
-  def dcg(size) when size < 2 do
-    dcg(size + 1)
+  defp sized_dcg(size, g) when size < 2 do
+    sized_dcg(size + 1, g)
   end
-  def dcg(size) do
-    dcg(size, Graph.new)
-  end
-  defp dcg(0, g), do: g
-  defp dcg(1, g), do: g
-  defp dcg(i, g) do
+  defp sized_dcg(0, g), do: g
+  defp sized_dcg(1, g), do: g
+  defp sized_dcg(i, g) do
     g = Enum.reduce(0..i, g, fn v, g -> Graph.add_vertex(g, v) end)
     Enum.reduce(0..i, g, fn v, g ->
       r = 0..i
@@ -194,14 +212,30 @@ defmodule Graph.Model.Test do
     end)
   end
 
-  def mesh(), do: sized(s, mesh(s))
-  def mesh(size) when size < 2 do
-    mesh(size + 1)
+  def mesh() do
+    such_that g <- sized_mesh() do
+      cyclic? = Graph.is_cyclic?(g)
+      num_vertices = Graph.num_vertices(g)
+      strongly_connected? = Enum.reduce(g.vertices, true, fn
+        _, false ->
+          false
+        {v_id, _v}, _acc ->
+          out_edges = Map.get(g.out_edges, v_id, MapSet.new) |> MapSet.delete(v_id)
+          in_edges = Map.get(g.in_edges, v_id, MapSet.new) |> MapSet.delete(v_id)
+          MapSet.size(out_edges) == (num_vertices - 1) &&
+            MapSet.size(in_edges) == (num_vertices - 1) &&
+            MapSet.size(MapSet.difference(out_edges, in_edges)) == 0
+      end)
+      cyclic? && strongly_connected?
+    end
   end
-  def mesh(size) do
-    mesh(size, Graph.new)
+  defp sized_mesh() do
+    sized s, do: sized_mesh(s, Graph.new)
   end
-  def mesh(size, g) do
+  defp sized_mesh(size, g) when size < 2 do
+    sized_mesh(size + 1, g)
+  end
+  defp sized_mesh(size, g) do
     g = Enum.reduce(0..size, g, fn v, g -> Graph.add_vertex(g, v) end)
     vs = Graph.vertices(g)
     Enum.reduce(vs, g, fn v, acc ->
