@@ -2,6 +2,15 @@ defmodule PriorityQueue.Test do
   use ExUnit.Case, async: true
   doctest PriorityQueue
 
+  test "inspect" do
+    pq = Enum.reduce(0..4, PriorityQueue.new, fn i, pq ->
+      pq
+      |> PriorityQueue.push(?a+i, i)
+    end)
+    str = "#{inspect pq}"
+    assert "#PriorityQueue<size: 5, queue: 'abcde'>" = str
+  end
+
   test "can enqueue random elements and pull them out in priority order" do
     pq = Enum.reduce(Enum.shuffle(0..9), PriorityQueue.new, fn i, pq ->
       pq

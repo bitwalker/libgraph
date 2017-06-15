@@ -10,7 +10,7 @@ defmodule Graph.Serializers.DOT do
       "strict digraph {\n" <>
         serialize_nodes(g) <>
         serialize_edges(g) <>
-      "}"
+      "}\n"
     {:ok, result}
   end
 
@@ -31,7 +31,7 @@ defmodule Graph.Serializers.DOT do
   defp encode_label(label), do: quoted("#{inspect label}")
 
   defp quoted(str) do
-    <<?", escape_quotes(str) ,?">>
+    <<?", escape_quotes(str)::binary, ?">>
   end
   defp escape_quotes(str) do
     escape_quotes(str, "")
@@ -42,6 +42,9 @@ defmodule Graph.Serializers.DOT do
   end
   defp escape_quotes(<<?\", rest::binary>>, acc) do
     escape_quotes(rest, <<acc::binary, ?\\, ?\">>)
+  end
+  defp escape_quotes(<<c::utf8, rest::binary>>, acc) do
+    escape_quotes(rest, <<acc::binary, c::utf8>>)
   end
 
   defp serialize_edges(%Graph{vertices: vertices, out_edges: oe, edges: em} = g) do

@@ -803,6 +803,9 @@ defmodule Graph do
         ^old_label ->
           new_meta = Map.put(meta, old_label, new_weight)
           %__MODULE__{g | edges: Map.put(em, edge_key, new_meta)}
+        nil ->
+          new_meta = Map.put(meta, old_label, new_weight)
+          %__MODULE__{g | edges: Map.put(em, edge_key, new_meta)}
         _ ->
           new_meta = Map.put(Map.delete(meta, old_label), new_label, new_weight)
           %__MODULE__{g | edges: Map.put(em, edge_key, new_meta)}

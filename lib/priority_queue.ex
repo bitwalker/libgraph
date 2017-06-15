@@ -109,10 +109,6 @@ defmodule PriorityQueue do
   end
 
   defimpl Inspect do
-    def inspect(pq, %{structs: false} = opts) do
-      Inspect.Algebra.to_doc(pq, opts)
-    end
-
     def inspect(%PriorityQueue{priorities: {size, _} = tree}, opts) when size > 0 do
       items =
         tree

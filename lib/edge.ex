@@ -21,37 +21,26 @@ defmodule Graph.Edge do
   @type edge_opts :: [edge_opt]
 
   @doc """
-  Defines a new edge with a weight of 1 and no label.
-  """
-  @spec new(Graph.vertex, Graph.vertex) :: t
-  def new(v1, v2) do
-    %__MODULE__{v1: v1, v2: v2}
-  end
-
-  @doc """
   Defines a new edge and accepts optional values for weight and label.
   The defaults of a weight of 1 and no label will be used if the options do
   not specify otherwise.
+
+  If you provide a non-integer weight, an error will be thrown.
+
+  ## Example
+
+      iex> Graph.new |> Graph.add_edge(Graph.Edge.new(:a, :b, weight: "1"))
+      ** (ArgumentError) invalid value for :weight, must be an integer
   """
-  @spec new(Graph.vertex, Graph.vertex, [edge_opt]) :: t
-  def new(v1, v2, opts) when is_list(opts) do
+  @spec new(Graph.vertex, Graph.vertex) :: t
+  @spec new(Graph.vertex, Graph.vertex, [edge_opt]) :: t | no_return
+  def new(v1, v2, opts \\ []) when is_list(opts) do
     %__MODULE__{
       v1: v1,
       v2: v2,
       weight: Keyword.get(opts, :weight, 1),
       label: Keyword.get(opts, :label)
     }
-  end
-  def new(v1, v2, opts) when is_map(opts) do
-    %__MODULE__{
-      v1: v1,
-      v2: v2,
-      weight: Map.get(opts, :weight, 1),
-      label: Map.get(opts, :label)
-    }
-  end
-  def new(v1, v2, nil) do
-    %__MODULE__{v1: v1, v2: v2}
   end
 
   @doc false
@@ -61,18 +50,8 @@ defmodule Graph.Edge do
     case {label, weight} do
       {_, w} = meta when is_integer(w) ->
         meta
-      {_, w} ->
-        throw {:error, {:invalid_edge_option, {:weight, w}}}
-    end
-  end
-  def options_to_meta(opts) when is_map(opts) do
-    label = Map.get(opts, :label)
-    weight = Map.get(opts, :weight, 1)
-    case {label, weight} do
-      {_, w} = meta when is_integer(w) ->
-        meta
-      {_, w} ->
-        throw {:error, {:invalid_edge_option, {:weight, w}}}
+      {_, _} ->
+        raise ArgumentError, message: "invalid value for :weight, must be an integer"
     end
   end
   def options_to_meta(nil), do: nil

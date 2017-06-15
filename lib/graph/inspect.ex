@@ -1,7 +1,4 @@
 defimpl Inspect, for: Graph do
-  def inspect(g, %{structs: false} = opts) do
-    Inspect.Algebra.to_doc(g, opts)
-  end
   # For graphs with less than 100 vertices, we'll try to pretty print it,
   # however we should avoid doing so with larger graphs, as it will likely cause outrageous
   # memory consumption, not to mention be expensive to calculate, and the pretty form is not
