@@ -10,19 +10,17 @@
 
 This library provides:
 
-- An implementation of a graph datastructure, `Graph`, designed for both directed and undirected graphs, however
-  API support for undirected graph operations is lacking at the moment, as I'm primarily concerned with directed graphs
-  at the moment, however I will be working on pushing that support forward as soon as possible.
+- An implementation of a graph datastructure, `Graph`, designed for both directed and undirected graphs. The API supports
+  undirected graphs, but I'm still getting the tests updated to cover properties of undirected graphs.
 - A priority queue implementation `PriorityQueue`, oriented towards graphs (it prioritizes lower integer values over high),
   it is the fastest priority queue I know of which allows arbitrary priorities, and is more or less at parity with
   `pqueue3` from [the pqueue library](https://github.com/okeuday/pqueue/), which supports priorities from 0 to 65535.
 - An idiomatic Elixir API for creating, modifying, and querying it's graph structure. Creating and modifying a graph
   can be done in a single pipeline, and all queries take a Graph as their first parameter (one of my complaints with `:digraph`
   is that there is some inconsistency with the API between `:digraph` and `:digraph_utils` for no apparent reason).
-- A `Reducer` behaviour, for defining your own means of traversing a graph, and being able to use that with
-  the standard `libgraph` API. Two reducers, breadth-first and depth-first, are provided out of the box,
-  however this API is still early in development, so expect some changes here - at this time it is not fully
-  supported.
+- Two "Reducer" implementations for mapping/reducing over a graph. I am trying to figure out the best way to make these
+extendable and part of the API, so that you can drop in your own shortest path algorithms, etc - but I have yet to come up with an
+approach that feels good on that front.
 - A `Serializer` behaviour, for defining custom serialization of graphs, with a Graphviz DOT format serializer
   provided out of the box.
 
@@ -95,9 +93,7 @@ considers lower integer values higher priority, which is perfect for the kinds o
 
 ## Roadmap
 
-The following are items I plan to implement soon - they are not in any particular order.
-
-- [ ] Improved support for undirected graphs
+Please open an issue if you have a feature request!
 
 ## License
 

@@ -7,6 +7,7 @@ defmodule GraphTest do
 
   test "inspect" do
     g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])
+    ug = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])
 
     # structs: false
     structs_false = "#{inspect g, structs: false}"
@@ -15,18 +16,20 @@ defmodule GraphTest do
 
     # pretty printed
     str = "#{inspect g}"
-    assert "#Graph<vertices: [:a, :b, :c], edges: [:a -(foo:1)> :b, :a -> :b, :b -({:complex, :label}:1)> :a, :b -(3)> :c]>" = str
+    assert "#Graph<type: directed, vertices: [:a, :b, :c], edges: [:a -[foo]-> :b, :a -> :b, :b -[{:complex, :label}]-> :a, :b -> :c]>" = str
+    ustr = "#{inspect ug}"
+    assert "#Graph<type: undirected, vertices: [:a, :b, :c], edges: [:a <-[foo]-> :b, :a <-> :b, :a <-[{:complex, :label}]-> :b, :b <-> :c]>" = ustr
 
     # large graph
     g = Enum.reduce(1..150, Graph.new, fn i, g -> Graph.add_edge(g, i, i+1) end)
     str = "#{inspect g}"
-    assert "#Graph<num_vertices: 151, num_edges: 150>" = str
+    assert "#Graph<type: directed, num_vertices: 151, num_edges: 150>" = str
   end
 
   test "get info about graph" do
     g = build_basic_cyclic_graph()
 
-    assert %{num_vertices: 5, num_edges: 7} = Graph.info(g)
+    assert %{type: :directed, num_vertices: 5, num_edges: 7} = Graph.info(g)
   end
 
   test "is_cyclic?" do

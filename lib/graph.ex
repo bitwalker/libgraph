@@ -1,6 +1,6 @@
 defmodule Graph do
   @moduledoc """
-  This module defines a directed graph data structure, which supports both acyclic and cyclic forms.
+  This module defines a graph data structure, which supports directed and undirected graphs, in both acyclic and cyclic forms.
   It also defines the API for creating, manipulating, and querying that structure.
 
   As far as memory usage is concerned, `Graph` should be fairly compact in memory, but if you want to do a rough
@@ -29,9 +29,10 @@ defmodule Graph do
             out_edges: %{},
             edges: %{},
             vertex_labels: %{},
-            vertices: %{}
+            vertices: %{},
+            type: :directed
 
-  alias Graph.Edge
+  alias Graph.{Edge, EdgeSpecificationError}
 
   @type vertex_id :: non_neg_integer
   @type vertex :: term
@@ -39,20 +40,44 @@ defmodule Graph do
   @type edge_weight :: integer
   @type edge_key :: {vertex_id, vertex_id}
   @type edge_value :: %{label => edge_weight}
+  @type graph_type :: :directed | :undirected
   @type t :: %__MODULE__{
     in_edges: %{vertex_id => MapSet.t},
     out_edges: %{vertex_id => MapSet.t},
     edges: %{edge_key => edge_value},
     vertex_labels: %{vertex_id => term},
-    vertices: %{vertex_id => vertex}
+    vertices: %{vertex_id => vertex},
+    type: graph_type
   }
 
   @doc """
-  Creates a new graph.
+  Creates a new directed graph.
   """
   @spec new() :: t
-  def new do
-    %__MODULE__{}
+  def new(), do: new(type: :directed)
+
+  @doc """
+  Creates a new graph using the provided options.
+
+  ## Options
+
+  - `type: :directed | :undirected`, specifies what type of graph this is
+
+  ## Example
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:b, :a}])
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b}]
+
+      iex> g = Graph.new(type: :directed) |> Graph.add_edges([{:a, :b}, {:b, :a}])
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :a}]
+  """
+  @type new_opt :: {:type, graph_type}
+  @type new_opts :: [new_opt]
+  @spec new(new_opts) :: t
+  def new(type: type) when type in [:directed, :undirected] do
+    %__MODULE__{type: type}
   end
 
   @doc """
@@ -66,11 +91,12 @@ defmodule Graph do
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
       ...> g = g |> Graph.add_edges([{:a, :b}, {:b, :c}])
       ...> Graph.info(g)
-      %{num_vertices: 4, num_edges: 2, size_in_bytes: 1048}
+      %{type: :directed, num_vertices: 4, num_edges: 2, size_in_bytes: 1064}
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
-  def info(%__MODULE__{} = g) do
-    %{num_edges: num_edges(g),
+  def info(%__MODULE__{type: type} = g) do
+    %{type: type,
+      num_edges: num_edges(g),
       num_vertices: num_vertices(g),
       size_in_bytes: Graph.Utils.sizeof(g)}
   end
@@ -152,10 +178,13 @@ defmodule Graph do
   @doc """
   Returns true if and only if the graph `g` is a tree.
 
+  This function always returns false for undirected graphs.
+
   NOTE: Multiple edges between the same pair of vertices in the same direction are
   considered a single edge when determining if the provided graph is a tree.
   """
   @spec is_tree?(t) :: boolean
+  def is_tree?(%__MODULE__{type: :undirected}), do: false
   def is_tree?(%__MODULE__{out_edges: es, vertices: vs} = g) do
     num_edges = Enum.reduce(es, 0, fn {_, out}, sum -> sum + MapSet.size(out) end)
     if num_edges == (map_size(vs) - 1) do
@@ -171,13 +200,15 @@ defmodule Graph do
   to every other vertex in the graph.
   """
   @spec is_arborescence?(t) :: boolean
-  defdelegate is_arborescence?(g), to: Graph.Directed
+  def is_arborescence?(%__MODULE__{type: :undirected}), do: false
+  def is_arborescence?(%__MODULE__{} = g), do: Graph.Directed.is_arborescence?(g)
 
   @doc """
   Returns the root vertex of the arborescence, if one exists, otherwise nil.
   """
   @spec arborescence_root(t) :: vertex | nil
-  defdelegate arborescence_root(g), to: Graph.Directed
+  def arborescence_root(%__MODULE__{type: :undirected}), do: nil
+  def arborescence_root(%__MODULE__{} = g), do: Graph.Directed.arborescence_root(g)
 
   @doc """
   Returns true if and only if the graph `g` is acyclic.
@@ -189,9 +220,7 @@ defmodule Graph do
   Returns true if the graph `g` is not acyclic.
   """
   @spec is_cyclic?(t) :: boolean
-  def is_cyclic?(%__MODULE__{} = g) do
-    not is_acyclic?(g)
-  end
+  def is_cyclic?(%__MODULE__{} = g), do: not is_acyclic?(g)
 
   @doc """
   Returns true if graph `g1` is a subgraph of `g2`.
@@ -337,6 +366,50 @@ defmodule Graph do
   end
 
   @doc """
+  Returns a list of all edges inbound or outbound from vertex `v`.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> Graph.edges(g, :b)
+      [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :c}]
+
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> Graph.edges(g, :d)
+      []
+  """
+  @spec edges(t, vertex) :: [Edge.t]
+  def edges(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta, vertices: vs}, v) do
+    with v_id <- Graph.Utils.vertex_id(v),
+         {:ok, v_in} <- Map.fetch(ie, v_id),
+         {:ok, v_out} <- Map.fetch(oe, v_id),
+         v_all <- MapSet.union(v_in, v_out) do
+      Enum.flat_map(v_all, fn v2_id ->
+        case Map.get(meta, {v_id, v2_id}) do
+          nil ->
+            case Map.get(meta, {v2_id, v_id}) do
+              nil ->
+                []
+              edge_meta when is_map(edge_meta) ->
+                v2 = Map.get(vs, v2_id)
+                for {label, weight} <- edge_meta do
+                  Edge.new(v2, v, label: label, weight: weight)
+                end
+            end
+          edge_meta when is_map(edge_meta) ->
+            v2 = Map.get(vs, v2_id)
+            for {label, weight} <- edge_meta do
+              Edge.new(v, v2, label: label, weight: weight)
+            end
+        end
+      end)
+    else
+      _ ->
+        []
+    end
+  end
+
+  @doc """
   Returns a list of all edges between `v1` and `v2`.
 
   ## Example
@@ -347,13 +420,22 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
   """
   @spec edges(t, vertex, vertex) :: [Edge.t]
-  def edges(%__MODULE__{edges: meta}, v1, v2) do
+  def edges(%__MODULE__{type: type, edges: meta}, v1, v2) do
     with v1_id <- Graph.Utils.vertex_id(v1),
          v2_id <- Graph.Utils.vertex_id(v2),
          edge_key <- {v1_id, v2_id},
          {:ok, edge_meta} <- Map.fetch(meta, edge_key) do
-      for {label, weight} <- edge_meta do
-        Edge.new(v1, v2, label: label, weight: weight)
+      case type do
+        :directed ->
+          for {label, weight} <- edge_meta do
+            Edge.new(v1, v2, label: label, weight: weight)
+          end
+        :undirected ->
+          edge_meta2 = Map.get(meta, {v2_id, v1_id}, %{})
+          merged_meta = Map.merge(edge_meta, edge_meta2)
+          for {label, weight} <- merged_meta do
+            Edge.new(v1, v2, label: label, weight: weight)
+          end
       end
     else
       _ -> []
@@ -382,7 +464,17 @@ defmodule Graph do
   def edge(%__MODULE__{} = g, v1, v2) do
     edge(g, v1, v2, nil)
   end
-  def edge(%__MODULE__{edges: meta}, v1, v2, label) do
+  def edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
+    if v1 > v2 do
+      do_edge(g, v2, v1, label)
+    else
+      do_edge(g, v1, v2, label)
+    end
+  end
+  def edge(%__MODULE__{} = g, v1, v2, label) do
+    do_edge(g, v1, v2, label)
+  end
+  defp do_edge(%__MODULE__{edges: meta}, v1, v2, label) do
     with v1_id <- Graph.Utils.vertex_id(v1),
          v2_id <- Graph.Utils.vertex_id(v2),
          edge_key <- {v1_id, v2_id},
@@ -633,7 +725,7 @@ defmodule Graph do
   end
 
   @doc """
-  Adds an edge connecting `a` to `b`. If either `a` or `b` do not exist in the graph,
+  Adds an edge connecting `v1` to `v2`. If either `v1` or `v2` do not exist in the graph,
   they are automatically added. Adding the same edge more than once does not create multiple edges,
   each edge is only ever stored once.
 
@@ -653,34 +745,44 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
   """
   @spec add_edge(t, vertex, vertex) :: t
-  @spec add_edge(t, vertex, vertex, Edge.edge_opts) :: t | {:error, {:invalid_edge_option, term}}
-  def add_edge(%__MODULE__{} = g, a, b, opts \\ []) when is_list(opts) do
-    %__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g =
-      g |> add_vertex(a) |> add_vertex(b)
+  @spec add_edge(t, vertex, vertex, Edge.edge_opts) :: t | no_return
+  def add_edge(g, v1, v2, opts \\ [])
 
-    a_id = Graph.Utils.vertex_id(a)
-    b_id = Graph.Utils.vertex_id(b)
+  def add_edge(%__MODULE__{type: :undirected} = g, v1, v2, opts) when is_list(opts) do
+    if v1 > v2 do
+      do_add_edge(g, v2, v1, opts)
+    else
+      do_add_edge(g, v1, v2, opts)
+    end
+  end
+  def add_edge(%__MODULE__{} = g, v1, v2, opts) when is_list(opts) do
+    do_add_edge(g, v1, v2, opts)
+  end
+  defp do_add_edge(%__MODULE__{} = g, v1, v2, opts) do
+    v1_id = Graph.Utils.vertex_id(v1)
+    v2_id = Graph.Utils.vertex_id(v2)
+
+    %__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g =
+      g |> add_vertex(v1) |> add_vertex(v2)
+
     out_neighbors =
-      case Map.get(oe, a_id) do
-        nil -> MapSet.new([b_id])
-        ms  -> MapSet.put(ms, b_id)
+      case Map.get(oe, v1_id) do
+        nil -> MapSet.new([v2_id])
+        ms  -> MapSet.put(ms, v2_id)
       end
     in_neighbors =
-      case Map.get(ie, b_id) do
-        nil -> MapSet.new([a_id])
-        ms  -> MapSet.put(ms, a_id)
+      case Map.get(ie, v2_id) do
+        nil -> MapSet.new([v1_id])
+        ms  -> MapSet.put(ms, v1_id)
       end
-    edge_meta = Map.get(meta, {a_id, b_id}, %{})
+    edge_meta = Map.get(meta, {v1_id, v2_id}, %{})
     {label, weight} = Edge.options_to_meta(opts)
     edge_meta = Map.put(edge_meta, label, weight)
     %__MODULE__{g |
-      in_edges: Map.put(ie, b_id, in_neighbors),
-      out_edges: Map.put(oe, a_id, out_neighbors),
-      edges: Map.put(meta, {a_id, b_id}, edge_meta)
+      in_edges: Map.put(ie, v2_id, in_neighbors),
+      out_edges: Map.put(oe, v1_id, out_neighbors),
+      edges: Map.put(meta, {v1_id, v2_id}, edge_meta)
     }
-  catch
-    _, {:error, {:invalid_edge_option, _}} = err ->
-      err
   end
 
   @doc """
@@ -692,6 +794,8 @@ defmodule Graph do
 
   See the docs for `Graph.Edge.new/2` or `Graph.Edge.new/3` for more info on creating Edge structs, and
   `add_edge/3` for information on edge options.
+
+  If an invalid edge specification is provided, raises `Graph.EdgeSpecificationError`.
 
   ## Examples
 
@@ -706,9 +810,9 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
 
       iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
-      {:error, {:invalid_edge, :a}}
+      ** (Graph.EdgeSpecificationError) Expected a valid edge specification, but got: :a
   """
-  @spec add_edges(t, [Edge.t]) :: t | {:error, {:invalid_edge, term}}
+  @spec add_edges(t, [Edge.t]) :: t | no_return
   def add_edges(%__MODULE__{} = g, es) when is_list(es) do
     Enum.reduce(es, g, fn
       %Edge{} = edge, acc ->
@@ -718,11 +822,8 @@ defmodule Graph do
       {v1, v2, opts}, acc when is_list(opts) ->
         add_edge(acc, v1, v2, opts)
       bad_edge, _acc ->
-        throw {:error, {:invalid_edge, bad_edge}}
+        raise Graph.EdgeSpecificationError, bad_edge
     end)
-  catch
-    :throw, {:error, {:invalid_edge, _}} = err ->
-      err
   end
 
   @doc """
@@ -740,7 +841,17 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, weight: 2}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
-  def split_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: em} = g, v1, v2, v3) do
+  def split_edge(%__MODULE__{type: :undirected} = g, v1, v2, v3) do
+    if v1 > v2 do
+      do_split_edge(g, v2, v1, v3)
+    else
+      do_split_edge(g, v1, v2, v3)
+    end
+  end
+  def split_edge(%__MODULE__{} = g, v1, v2, v3) do
+    do_split_edge(g, v1, v2, v3)
+  end
+  defp do_split_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: em} = g, v1, v2, v3) do
     with v1_id  <- Graph.Utils.vertex_id(v1),
          v2_id  <- Graph.Utils.vertex_id(v2),
          {:ok, v1_out} <- Map.fetch(oe, v1_id),
@@ -792,7 +903,17 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec update_labelled_edge(t, vertex, vertex, label, Edge.edge_opts) :: t | {:error, :no_such_edge}
-  def update_labelled_edge(%__MODULE__{edges: em} = g, v1, v2, old_label, opts) when is_list(opts) do
+  def update_labelled_edge(%__MODULE__{type: :undirected} = g, v1, v2, old_label, opts) when is_list(opts) do
+    if v1 > v2 do
+      do_update_labelled_edge(g, v2, v1, old_label, opts)
+    else
+      do_update_labelled_edge(g, v1, v2, old_label, opts)
+    end
+  end
+  def update_labelled_edge(%__MODULE__{} = g, v1, v2, old_label, opts) when is_list(opts) do
+    do_update_labelled_edge(g, v1, v2, old_label, opts)
+  end
+  defp do_update_labelled_edge(%__MODULE__{edges: em} = g, v1, v2, old_label, opts) do
     with v1_id <- Graph.Utils.vertex_id(v1),
          v2_id <- Graph.Utils.vertex_id(v2),
          edge_key <- {v1_id, v2_id},
@@ -817,7 +938,7 @@ defmodule Graph do
   end
 
   @doc """
-  Removes an edge connecting `a` to `b`. A label can be specified to disambiguate the
+  Removes an edge connecting `v1` to `v2`. A label can be specified to disambiguate the
   specific edge you wish to delete, if not provided, the unlabelled edge, if one exists,
   will be removed.
 
@@ -837,23 +958,36 @@ defmodule Graph do
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: nil}]
   """
-  def delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, a, b, label \\ nil) do
-    with a_id <- Graph.Utils.vertex_id(a),
-         b_id <- Graph.Utils.vertex_id(b),
-         edge_key <- {a_id, b_id},
-         {:ok, a_out} <- Map.fetch(oe, a_id),
-         {:ok, b_in}  <- Map.fetch(ie, b_id),
+  @spec delete_edge(t, vertex, vertex) :: t
+  @spec delete_edge(t, vertex, vertex, label) :: t
+  def delete_edge(g, v1, v2, label \\ nil)
+  def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
+    if v1 > v2 do
+      do_delete_edge(g, v2, v1, label)
+    else
+      do_delete_edge(g, v1, v2, label)
+    end
+  end
+  def delete_edge(%__MODULE__{} = g, v1, v2, label) do
+    do_delete_edge(g, v1, v2, label)
+  end
+  defp do_delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2, label) do
+    with v1_id <- Graph.Utils.vertex_id(v1),
+         v2_id <- Graph.Utils.vertex_id(v2),
+         edge_key <- {v1_id, v2_id},
+         {:ok, v1_out} <- Map.fetch(oe, v1_id),
+         {:ok, v2_in}  <- Map.fetch(ie, v2_id),
          {:ok, edge_meta} <- Map.fetch(meta, edge_key),
          {:ok, _} <- Map.fetch(edge_meta, label) do
       edge_meta = Map.delete(edge_meta, label)
       case map_size(edge_meta) do
         0 ->
-          a_out = MapSet.delete(a_out, b_id)
-          b_in  = MapSet.delete(b_in, a_id)
+          v1_out = MapSet.delete(v1_out, v2_id)
+          v2_in  = MapSet.delete(v2_in, v1_id)
           meta = Map.delete(meta, edge_key)
           %__MODULE__{g |
-                      in_edges: Map.put(ie, b_id, b_in),
-                      out_edges: Map.put(oe, a_id, a_out),
+                      in_edges: Map.put(ie, v2_id, v2_in),
+                      out_edges: Map.put(oe, v1_id, v1_out),
                       edges: meta}
         _ ->
           meta = Map.put(meta, edge_key, edge_meta)
@@ -869,7 +1003,7 @@ defmodule Graph do
   edges from the graph, if they exist.
 
   Edge specifications can be `Edge` structs, `{vertex, vertex}` pairs, or `{vertex, vertex, label: label}`
-  triplets.
+  triplets. An invalid specification will cause `Graph.EdgeSpecificationError` to be raised.
 
   ## Examples
 
@@ -890,9 +1024,9 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
       ...> Graph.delete_edges(g, [:a])
-      {:error, {:invalid_edge, :a}}
+      ** (Graph.EdgeSpecificationError) Expected a valid edge specification, but got: :a
   """
-  @spec delete_edges(t, [{vertex, vertex}]) :: t | {:error, {:invalid_edge, term}}
+  @spec delete_edges(t, [{vertex, vertex}]) :: t | no_return
   def delete_edges(%__MODULE__{} = g, es) when is_list(es) do
     Enum.reduce(es, g, fn
       {v1, v2}, acc ->
@@ -902,11 +1036,8 @@ defmodule Graph do
       %Edge{v1: v1, v2: v2, label: label}, acc ->
         delete_edge(acc, v1, v2, label)
       bad_edge, _acc ->
-        throw {:error, {:invalid_edge, bad_edge}}
+        raise EdgeSpecificationError, bad_edge
     end)
-  catch
-    :throw, {:error, {:invalid_edge, _}} = err ->
-      err
   end
 
   @doc """
@@ -922,7 +1053,17 @@ defmodule Graph do
       [%Graph.Edge{v1: :b, v2: :a}]
   """
   @spec delete_edges(t, vertex, vertex) :: t
-  def delete_edges(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2) do
+  def delete_edges(%__MODULE__{type: :undirected} = g, v1, v2) do
+    if v1 > v2 do
+      do_delete_edges(g, v2, v1)
+    else
+      do_delete_edges(g, v1, v2)
+    end
+  end
+  def delete_edges(%__MODULE__{} = g, v1, v2) do
+    do_delete_edges(g, v1, v2)
+  end
+  defp do_delete_edges(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2) do
     with v1_id <- Graph.Utils.vertex_id(v1),
          v2_id <- Graph.Utils.vertex_id(v2),
          edge_key <- {v1_id, v2_id},
@@ -977,7 +1118,8 @@ defmodule Graph do
       false
   """
   @spec topsort(t) :: [vertex]
-  defdelegate topsort(g), to: Graph.Directed, as: :topsort
+  def topsort(%__MODULE__{type: :undirected}), do: false
+  def topsort(%__MODULE__{} = g), do: Graph.Directed.topsort(g)
 
   @doc """
   Returns a list of connected components, where each component is a list of vertices.
@@ -1149,12 +1291,31 @@ defmodule Graph do
 
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.
 
+  For undirected graphs, the in-degree and out-degree are always the same - the sum total
+  of all edges inbound or outbound from the vertex.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
       ...> Graph.in_degree(g, :b)
       1
   """
+  def in_degree(%__MODULE__{type: :undirected, in_edges: ie, out_edges: oe, edges: meta}, v) do
+    v_id = Graph.Utils.vertex_id(v)
+    v_in = Map.get(ie, v_id, MapSet.new)
+    v_out = Map.get(oe, v_id, MapSet.new)
+    v_all = MapSet.union(v_in, v_out)
+    Enum.reduce(v_all, 0, fn v1_id, sum ->
+      case Map.fetch(meta, {v1_id, v_id}) do
+        {:ok, edge_meta} -> sum + map_size(edge_meta)
+        _ ->
+          case Map.fetch(meta, {v_id, v1_id}) do
+            {:ok, edge_meta} -> sum + map_size(edge_meta)
+            _ -> sum
+          end
+      end
+    end)
+  end
   def in_degree(%__MODULE__{in_edges: ie, edges: meta}, v) do
     with v_id <- Graph.Utils.vertex_id(v),
          {:ok, v_in} <- Map.fetch(ie, v_id) do
@@ -1171,6 +1332,9 @@ defmodule Graph do
 
   The *out-degree* of a vertex is the number of edges directed outbound from that vertex.
 
+  For undirected graphs, the in-degree and out-degree are always the same - the sum total
+  of all edges inbound or outbound from the vertex.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
@@ -1178,6 +1342,11 @@ defmodule Graph do
       1
   """
   @spec out_degree(t, vertex) :: non_neg_integer
+  def out_degree(%__MODULE__{type: :undirected} = g, v) do
+    # Take advantage of the fact that in_degree and out_degree
+    # are the same for undirected graphs
+    in_degree(g, v)
+  end
   def out_degree(%__MODULE__{out_edges: oe, edges: meta}, v) do
     with v_id  <- Graph.Utils.vertex_id(v),
          {:ok, v_out} <- Map.fetch(oe, v_id) do
@@ -1190,7 +1359,34 @@ defmodule Graph do
   end
 
   @doc """
+  Return all neighboring vertices of the given vertex.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :a}, {:b, :c}, {:c, :a}])
+      ...> Graph.neighbors(g, :a)
+      [:b, :c]
+
+      iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :a}, {:b, :c}, {:c, :a}])
+      ...> Graph.neighbors(g, :d)
+      []
+  """
+  @spec neighbors(t, vertex) :: [vertex]
+  def neighbors(%__MODULE__{in_edges: ie, out_edges: oe, vertices: vs}, v) do
+    with v_id <- Graph.Utils.vertex_id(v),
+         {:ok, v_in} <- Map.fetch(ie, v_id),
+         {:ok, v_out} <- Map.fetch(oe, v_id),
+         v_all = MapSet.union(v_in, v_out) do
+      Enum.map(v_all, &Map.get(vs, &1))
+    else
+      _ -> []
+    end
+  end
+
+  @doc """
   Returns a list of vertices which all have edges coming in to the given vertex `v`.
+
+  In the case of undirected graphs, it delegates to `neighbors/2`.
 
   ## Example
 
@@ -1199,7 +1395,10 @@ defmodule Graph do
       [:a]
   """
   @spec in_neighbors(t, vertex) :: [vertex]
-  def in_neighbors(%Graph{in_edges: ie, vertices: vs}, v) do
+  def in_neighbors(%__MODULE__{type: :undirected} = g, v) do
+    neighbors(g, v)
+  end
+  def in_neighbors(%__MODULE__{in_edges: ie, vertices: vs}, v) do
     with v_id <- Graph.Utils.vertex_id(v),
          {:ok, v_in} <- Map.fetch(ie, v_id) do
       Enum.map(v_in, &Map.get(vs, &1))
@@ -1211,6 +1410,8 @@ defmodule Graph do
   @doc """
   Returns a list of `Graph.Edge` structs representing the in edges to vertex `v`.
 
+  In the case of undirected graphs, it delegates to `edges/2`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
@@ -1218,6 +1419,9 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec in_edges(t, vertex) :: Edge.t
+  def in_edges(%__MODULE__{type: :undirected} = g, v) do
+    edges(g, v)
+  end
   def in_edges(%__MODULE__{vertices: vs, in_edges: ie, edges: meta}, v) do
     with v_id <- Graph.Utils.vertex_id(v),
          {:ok, v_in} <- Map.fetch(ie, v_id) do
@@ -1235,6 +1439,8 @@ defmodule Graph do
   @doc """
   Returns a list of vertices which the given vertex `v` has edges going to.
 
+  In the case of undirected graphs, it delegates to `neighbors/2`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
@@ -1242,6 +1448,9 @@ defmodule Graph do
       [:b]
   """
   @spec out_neighbors(t, vertex) :: [vertex]
+  def out_neighbors(%__MODULE__{type: :undirected} = g, v) do
+    neighbors(g, v)
+  end
   def out_neighbors(%__MODULE__{vertices: vs, out_edges: oe}, v) do
     with v_id <- Graph.Utils.vertex_id(v),
          {:ok, v_out} <- Map.fetch(oe, v_id) do
@@ -1254,6 +1463,8 @@ defmodule Graph do
   @doc """
   Returns a list of `Graph.Edge` structs representing the out edges from vertex `v`.
 
+  In the case of undirected graphs, it delegates to `edges/2`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
@@ -1261,6 +1472,9 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec out_edges(t, vertex) :: Edge.t
+  def out_edges(%__MODULE__{type: :undirected} = g, v) do
+    edges(g, v)
+  end
   def out_edges(%__MODULE__{vertices: vs, out_edges: oe, edges: meta}, v) do
     with v_id <- Graph.Utils.vertex_id(v),
          {:ok, v_out} <- Map.fetch(oe, v_id) do
@@ -1281,14 +1495,14 @@ defmodule Graph do
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
-  def subgraph(%__MODULE__{vertices: vertices, out_edges: oe, edges: meta}, vs) do
+  def subgraph(%__MODULE__{type: type, vertices: vertices, out_edges: oe, edges: meta}, vs) do
     allowed =
       vs
       |> Enum.map(&Graph.Utils.vertex_id/1)
       |> Enum.filter(&Map.has_key?(vertices, &1))
       |> MapSet.new
 
-    Enum.reduce(allowed, Graph.new, fn v_id, sg ->
+    Enum.reduce(allowed, Graph.new(type: type), fn v_id, sg ->
       v = Map.get(vertices, v_id)
       sg = Graph.add_vertex(sg, v)
       oe

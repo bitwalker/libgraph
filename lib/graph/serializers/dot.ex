@@ -5,9 +5,10 @@ defmodule Graph.Serializers.DOT do
   """
   use Graph.Serializer
 
-  def serialize(%Graph{} = g) do
+  def serialize(%Graph{type: type} = g) do
+    type = if type == :directed, do: "digraph", else: "graph"
     result =
-      "strict digraph {\n" <>
+      "strict #{type} {\n" <>
         serialize_nodes(g) <>
         serialize_edges(g) <>
       "}\n"
@@ -47,7 +48,7 @@ defmodule Graph.Serializers.DOT do
     escape_quotes(rest, <<acc::binary, c::utf8>>)
   end
 
-  defp serialize_edges(%Graph{vertices: vertices, out_edges: oe, edges: em} = g) do
+  defp serialize_edges(%Graph{type: type, vertices: vertices, out_edges: oe, edges: em} = g) do
     edges = Enum.reduce(vertices, [], fn {id, v}, acc ->
       v_label = get_vertex_label(g, id, v)
       edges =
@@ -67,11 +68,12 @@ defmodule Graph.Serializers.DOT do
         _ -> acc ++ edges
       end
     end)
+    arrow = if type == :directed, do: "->", else: "--"
     Enum.reduce(edges, "", fn
       {v_label, v2_label, weight, edge_label}, acc ->
-        acc <> indent(1) <> v_label <> " -> " <> v2_label <> " [" <> "label=#{edge_label}; weight=#{weight}" <> "]\n"
+        acc <> indent(1) <> v_label <> " #{arrow} " <> v2_label <> " [" <> "label=#{edge_label}; weight=#{weight}" <> "]\n"
       {v_label, v2_label, weight}, acc ->
-        acc <> indent(1) <> v_label <> " -> " <> v2_label <> " [" <> "weight=#{weight}" <> "]\n"
+        acc <> indent(1) <> v_label <> " #{arrow} " <> v2_label <> " [" <> "weight=#{weight}" <> "]\n"
     end)
   end
 
