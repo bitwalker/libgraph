@@ -10,7 +10,8 @@ defmodule Graph.Mixfile do
      deps: deps(),
      elixirc_paths: elixirc_paths(Mix.env),
      description: "A high-performance graph datastructure library for Elixir projects",
-     package: package()]
+     package: package(),
+     test_coverage: [tool: ExCoveralls]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -36,6 +37,7 @@ defmodule Graph.Mixfile do
   defp deps do
     [{:benchee, "~> 0.8", only: :dev},
      {:eqc_ex, "~> 1.4", only: [:dev, :test]},
+     {:excoveralls, "~> 0.7", only: [:dev, :test]},
      {:ex_doc, ">= 0.0.0", only: :dev}]
   end
 

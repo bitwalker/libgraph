@@ -9,8 +9,7 @@ env:
   - MIX_ENV=test
 script:
   - mix eqc.install --mini
-  - mix test --exclude=expensive
-  - mix test --only=expensive
+  - mix coveralls.travis
 notifications:
   recipients:
     - paulschoenfelder@gmail.com
