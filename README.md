@@ -2,6 +2,7 @@
 
 [![Master](https://travis-ci.org/bitwalker/libgraph.svg?branch=master)](https://travis-ci.org/bitwalker/libgraph)
 [![Hex.pm Version](http://img.shields.io/hexpm/v/libgraph.svg?style=flat)](https://hex.pm/packages/libgraph)
+[![Coverage Status](https://coveralls.io/repos/github/bitwalker/libgraph/badge.svg?branch=master)](https://coveralls.io/github/bitwalker/libgraph?branch=master)
 
 [Documentation](https://hexdocs.pm/libgraph)
 
