@@ -938,6 +938,48 @@ defmodule Graph do
   end
 
   @doc """
+  Removes all edges connecting `v1` to `v2`, regardless of label.
+
+  If no such edge exists, the graph is returned unmodified.
+
+  ## Example
+
+    iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}])
+    ...> g = Graph.delete_edge(g, :a, :b)
+    ...> [:a, :b] = Graph.vertices(g)
+    ...> Graph.edges(g)
+    []
+  """
+  @spec delete_edge(t, vertex, vertex) :: t
+  def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2) do
+    if v1 > v2 do
+      do_delete_edge(g, v2, v1)
+    else
+      do_delete_edge(g, v1, v2)
+    end
+  end
+  def delete_edge(%__MODULE__{} = g, v1, v2) do
+    do_delete_edge(g, v1, v2)
+  end
+  defp do_delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2) do
+    with v1_id <- Graph.Utils.vertex_id(v1),
+         v2_id <- Graph.Utils.vertex_id(v2),
+         edge_key <- {v1_id, v2_id},
+         {:ok, v1_out} <- Map.fetch(oe, v1_id),
+         {:ok, v2_in}  <- Map.fetch(ie, v2_id) do
+      v1_out = MapSet.delete(v1_out, v2_id)
+      v2_in  = MapSet.delete(v2_in, v1_id)
+      meta   = Map.delete(meta, edge_key)
+      %__MODULE__{g |
+                  in_edges: Map.put(ie, v2_id, v2_in),
+                  out_edges: Map.put(oe, v1_id, v1_out),
+                  edges: meta}
+    else
+      _ -> g
+    end
+  end
+
+  @doc """
   Removes an edge connecting `v1` to `v2`. A label can be specified to disambiguate the
   specific edge you wish to delete, if not provided, the unlabelled edge, if one exists,
   will be removed.
@@ -947,7 +989,7 @@ defmodule Graph do
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}])
-      ...> g = Graph.delete_edge(g, :a, :b)
+      ...> g = Graph.delete_edge(g, :a, :b, nil)
       ...> [:a, :b] = Graph.vertices(g)
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}]
@@ -958,9 +1000,7 @@ defmodule Graph do
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: nil}]
   """
-  @spec delete_edge(t, vertex, vertex) :: t
   @spec delete_edge(t, vertex, vertex, label) :: t
-  def delete_edge(g, v1, v2, label \\ nil)
   def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
     if v1 > v2 do
       do_delete_edge(g, v2, v1, label)
@@ -1014,6 +1054,11 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b, label: :foo)
       ...> g = Graph.delete_edges(g, [{:a, :b}])
+      ...> Graph.edges(g)
+      []
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b, label: :foo)
+      ...> g = Graph.delete_edges(g, [{:a, :b, label: :bar}])
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}]
 
