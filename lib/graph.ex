@@ -1477,6 +1477,33 @@ defmodule Graph do
   end
 
   @doc """
+  Returns the degree of vertex `v` of graph `g`.
+
+  The degree of a vertex is the total number of edges containing that vertex.
+
+  For directed graphs this is the same as the sum of the in-degree and out-degree
+  of the given vertex. For undirected graphs, the in-degree and out-degree are always
+  the same.
+
+  ## Example
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
+      ...> Graph.degree(g, :b)
+      1
+
+      iex> g = Graph.new() |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edge(:a, :b)
+      ...> Graph.degree(g, :b)
+      1
+  """
+  @spec degree(t, vertex) :: non_neg_integer
+  def degree(%__MODULE__{type: :undirected} = g, v) do
+    in_degree(g, v)
+  end
+  def degree(%__MODULE__{} = g, v) do
+    in_degree(g, v) + out_degree(g, v)
+  end
+
+  @doc """
   Returns the in-degree of vertex `v` of graph `g`.
 
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.
