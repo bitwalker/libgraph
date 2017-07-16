@@ -1418,14 +1418,11 @@ defmodule Graph do
   """
   @spec neighbors(t, vertex) :: [vertex]
   def neighbors(%__MODULE__{in_edges: ie, out_edges: oe, vertices: vs}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
-         {:ok, v_in} <- Map.fetch(ie, v_id),
-         {:ok, v_out} <- Map.fetch(oe, v_id),
-         v_all = MapSet.union(v_in, v_out) do
-      Enum.map(v_all, &Map.get(vs, &1))
-    else
-      _ -> []
-    end
+    v_id = Graph.Utils.vertex_id(v)
+    v_in = Map.get(ie, v_id, MapSet.new)
+    v_out = Map.get(oe, v_id, MapSet.new)
+    v_all = MapSet.union(v_in, v_out)
+    Enum.map(v_all, &Map.get(vs, &1))
   end
 
   @doc """
