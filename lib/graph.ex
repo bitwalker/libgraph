@@ -812,8 +812,8 @@ defmodule Graph do
       iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
       ** (Graph.EdgeSpecificationError) Expected a valid edge specification, but got: :a
   """
-  @spec add_edges(t, [Edge.t]) :: t | no_return
-  def add_edges(%__MODULE__{} = g, es) when is_list(es) do
+  @spec add_edges(t, [Edge.t] | Enumerable.t) :: t | no_return
+  def add_edges(%__MODULE__{} = g, es) do
     Enum.reduce(es, g, fn
       %Edge{} = edge, acc ->
         add_edge(acc, edge)
