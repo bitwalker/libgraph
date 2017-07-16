@@ -5,6 +5,7 @@ elixir:
 otp_release:
   - 18.3
   - 19.1
+  - 20.0
 env:
   - MIX_ENV=test
 script:
