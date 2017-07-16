@@ -1332,6 +1332,151 @@ defmodule Graph do
   defdelegate loop_vertices(g), to: Graph.Directed
 
   @doc """
+  Calculates the k-core for a given graph and value of `k`.
+
+  A k-core of the graph is a maximal subgraph of `g` which contains vertices of which all
+  have a degree of at least `k`. This function returns a new `Graph` which is a subgraph
+  of `g` containing all vertices which have a coreness >= the desired value of `k`.
+
+  If there is no k-core in the graph for the provided value of `k`, an empty `Graph` is returned.
+
+  NOTE: For performance reasons, k-core calculations make use of ETS. If you are
+  sensitive to the number of concurrent ETS tables running in your system, you should
+  be aware of it's usage here. Only 1 table is used, and it is automatically cleaned
+  up when this function returns.
+  """
+  @spec k_core(t, k :: non_neg_integer) :: [vertex]
+  def k_core(%__MODULE__{} = g, k) when is_integer(k) and k >= 0 do
+    vs =
+      g
+      |> decompose_cores()
+      |> Stream.filter(fn {_, vk} -> vk >= k end)
+      |> Enum.map(fn {v, _k} -> v end)
+    Graph.subgraph(g, vs)
+  end
+  def k_core(%__MODULE__{}, k) do
+    raise "`k` must be a positive number, got `#{inspect k}`"
+  end
+
+  @doc """
+  Groups all vertices by their k-coreness into a single map.
+
+  More commonly you will want a specific k-core, in particular the degeneracy core,
+  for which there are other functions in the API you can use. However if you have
+  a need to determine which k-core each vertex belongs to, this function can be used
+  to do just that.
+
+  As an example, you can construct the k-core for a given graph like so:
+
+      k_core_vertices =
+        g
+        |> Graph.k_core_components()
+        |> Stream.filter(fn {k, _} -> k >= desired_k end)
+        |> Enum.flat_map(fn {_, vs} -> vs end)
+      Graph.subgraph(g, k_core_vertices)
+  """
+  @spec k_core_components(t) :: %{k :: non_neg_integer => [vertex]}
+  def k_core_components(%__MODULE__{} = g) do
+    g
+    |> decompose_cores()
+    |> Enum.group_by(fn {_, k} -> k end, fn {v, _} -> v end)
+  end
+
+  @doc """
+  Determines the k-degeneracy of the given graph.
+
+  The degeneracy of graph `g` is the maximum value of `k` for which a k-core
+  exists in graph `g`.
+  """
+  @spec degeneracy(t) :: non_neg_integer
+  def degeneracy(%__MODULE__{} = g) do
+    res =
+      g
+      |> decompose_cores()
+      |> Enum.max_by(fn {_, k} -> k end, fn -> nil end)
+    case res do
+      {_, k} -> k
+      _ -> 0
+    end
+  end
+
+  @doc """
+  Calculates the degeneracy core of a given graph.
+
+  The degeneracy core of a graph is the k-core of the graph where the
+  value of `k` is the degeneracy of the graph. The degeneracy of a graph
+  is the highest value of `k` which has a non-empty k-core in the graph.
+  """
+  @spec degeneracy_core(t) :: t
+  def degeneracy_core(%__MODULE__{} = g) do
+    k_core(g, degeneracy(g))
+  end
+
+  @doc """
+  Calculates the k-coreness of vertex `v` in graph `g`.
+
+  The k-coreness of a vertex is defined as the maximum value of `k`
+  for which `v` is found in the corresponding k-core of graph `g`.
+  """
+  @spec coreness(t, vertex) :: non_neg_integer
+  def coreness(%__MODULE__{} = g, v) do
+    res =
+      g
+      |> decompose_cores()
+      |> Enum.find(fn {^v, _} -> true; _ -> false end)
+    case res do
+      {_, k} -> k
+      _ -> 0
+    end
+  end
+
+  # This produces a list of {v, k} where k is the largest k-core this vertex belongs to
+  defp decompose_cores(%__MODULE__{vertices: vs} = g) do
+    # Rules to remember
+    # - a k-core of a graph is a subgraph where each vertex has at least `k` neighbors in the subgraph
+    # - A k-core is not necessarily connected.
+    # - The core number for each vertex is the highest k-core it is a member of
+    # - A vertex in a k-core will be, by definition, in a (k-1)-core (cores are nested)
+    table = :ets.new(:k_cores, [:set, keypos: 1])
+    try do
+      # Since we are making many modifications to the graph as we work on it,
+      # it is more performant to store the list of vertices and their degree in ETS
+      # and work on it there. This is not strictly necessary, but makes the algorithm
+      # easier to read and is faster, so unless there is good reason to avoid ETS here
+      # I think it's a fair compromise.
+      Enum.each(vs, fn {_id, v} ->
+        d = out_degree(g, v)
+        :ets.insert(table, {v, d})
+      end)
+      decompose_cores(table, g, 1, [])
+    after
+      :ets.delete(table)
+    end
+  end
+  defp decompose_cores(table, g, k, l) do
+    case :ets.info(table, :size) do
+      0 ->
+        l
+      _ ->
+        # Select all v that have a degree less than `k`
+        case :ets.select(table, [{{:'$1', :'$2'}, [{:'<', :'$2', k}], [:'$1']}]) do
+          [] ->
+            decompose_cores(table, g, k+1, l)
+          matches ->
+            l2 =
+              Enum.reduce(matches, l, fn v, acc ->
+                :ets.delete(table, v)
+                for neighbor <- out_neighbors(g, v), not List.keymember?(acc, neighbor, 0) do
+                  :ets.update_counter(table, neighbor, {2, -1})
+                end
+                [{v, k-1}|acc]
+              end)
+            decompose_cores(table, g, k, l2)
+        end
+    end
+  end
+
+  @doc """
   Returns the in-degree of vertex `v` of graph `g`.
 
   The *in-degree* of a vertex is the number of edges directed inbound towards that vertex.

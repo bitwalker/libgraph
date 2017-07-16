@@ -140,6 +140,70 @@ defmodule GraphTest do
     assert [:b, :c] = Graph.in_neighbors(g, :d)
   end
 
+  test "k_core/2" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
+      |> Graph.add_edges([
+          {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
+          {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
+        ])
+    zero_core = Graph.k_core(g, 0)
+    assert Graph.is_subgraph?(zero_core, g)
+    assert Graph.vertices(g) == Graph.vertices(zero_core)
+
+    one_core = Graph.k_core(g, 1)
+    assert Graph.is_subgraph?(one_core, zero_core)
+    assert Graph.vertices(one_core) == [:a, :b, :c, :d, :e, :f, :g, :h]
+
+    three_core = Graph.k_core(g, 3)
+    assert Graph.is_subgraph?(three_core, one_core)
+    assert Graph.vertices(three_core) == [:a, :b, :c, :d]
+
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
+      |> Graph.add_edges([
+        {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d}, {:d, :e},
+        {:e, :f}, {:f, :g}, {:g, :h}, {:h, :i}, {:i, :f}, {:f, :h}, {:i, :g}
+      ])
+    three_core = Graph.k_core(g, 3)
+    assert Graph.vertices(three_core) == [:a, :b, :c, :d, :f, :g, :h, :i]
+  end
+
+  test "k_core_components/1" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
+      |> Graph.add_edges([
+      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
+      {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
+    ])
+    components = Graph.k_core_components(g)
+    assert [:i] = components[0]
+    assert [:e, :f, :g, :h] = components[1]
+    assert is_nil(components[2])
+    assert [:a, :b, :c, :d] = components[3]
+  end
+
+  @tag timeout: 120_000
+  @enron_emails Path.join([__DIR__, "fixtures", "email-Enron.txt"])
+  test "degeneracy/1 - Enron emails" do
+    g = Graph.Test.Fixtures.Parser.parse @enron_emails
+    assert 36_692 = Graph.num_vertices(g)
+    assert 183_831 = Graph.num_edges(g)
+    assert 43 = Graph.degeneracy(g)
+  end
+
+  @tag timeout: 120_000
+  @hamster_friends Path.join([__DIR__, "fixtures", "petster", "edges.txt"])
+  test "degeneracy/1 - Petster hamster friendships" do
+    g = Graph.Test.Fixtures.Parser.parse @hamster_friends
+    assert 1_858 = Graph.num_vertices(g)
+    assert 12_534 = Graph.num_edges(g)
+    assert 20 = Graph.degeneracy(g)
+  end
+
   defp build_basic_cyclic_graph do
     Graph.new
     |> Graph.add_vertex(:a)
