@@ -1,6 +1,7 @@
 defmodule Graph.Model.Test do
   use ExUnit.Case, async: true
   use EQC.ExUnit
+  @moduletag timeout: :infinity
 
   @tag numtests: 1000
   property "a directed acyclic graph (DAG) is always acyclic" do
