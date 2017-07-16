@@ -1345,7 +1345,7 @@ defmodule Graph do
   be aware of it's usage here. Only 1 table is used, and it is automatically cleaned
   up when this function returns.
   """
-  @spec k_core(t, k :: non_neg_integer) :: [vertex]
+  @spec k_core(t, k :: non_neg_integer) :: t
   def k_core(%__MODULE__{} = g, k) when is_integer(k) and k >= 0 do
     vs =
       g
