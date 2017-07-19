@@ -234,6 +234,11 @@ defmodule Graph do
       ...> g2 = Graph.new |> Graph.add_vertices([:b, :c]) |> Graph.add_edge(:b, :c)
       ...> Graph.is_subgraph?(g2, g1)
       true
+
+      iex> g1 = Graph.new |> Graph.add_vertices([:a, :b, :c, :d]) |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> g2 = Graph.new |> Graph.add_vertices([:b, :c, :e]) |> Graph.add_edges([{:b, :c}, {:c, :e}])
+      ...> Graph.is_subgraph?(g2, g1)
+      false
   """
   @spec is_subgraph?(t, t) :: boolean
   def is_subgraph?(%__MODULE__{edges: meta1, vertices: vs1}, %__MODULE__{edges: meta2, vertices: vs2}) do
@@ -418,6 +423,11 @@ defmodule Graph do
       ...> g = Graph.add_edge(g, :a, :b, label: :contains)
       ...> Graph.edges(g, :a, :b)
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b, label: :uses)
+      ...> g = Graph.add_edge(g, :a, :b, label: :contains)
+      ...> Graph.edges(g, :a, :b)
+      [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
   """
   @spec edges(t, vertex, vertex) :: [Edge.t]
   def edges(%__MODULE__{type: type, edges: meta}, v1, v2) do
@@ -456,6 +466,10 @@ defmodule Graph do
       %Graph.Edge{v1: :a, v2: :b}
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :contains}, {:a, :b, label: :uses}])
+      ...> Graph.edge(g, :a, :b, :contains)
+      %Graph.Edge{v1: :a, v2: :b, label: :contains}
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :contains}, {:a, :b, label: :uses}])
       ...> Graph.edge(g, :a, :b, :contains)
       %Graph.Edge{v1: :a, v2: :b, label: :contains}
   """
@@ -508,6 +522,16 @@ defmodule Graph do
 
   @doc """
   Returns true if the given vertex exists in the graph. Otherwise false.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b])
+      ...> Graph.has_vertex?(g, :a)
+      true
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b])
+      ...> Graph.has_vertex?(g, :c)
+      false
   """
   @spec has_vertex?(t, vertex) :: boolean
   def has_vertex?(%__MODULE__{vertices: vs}, v) do
@@ -604,12 +628,13 @@ defmodule Graph do
 
   ## Example
 
-      iex> g = Graph.new |> Graph.add_vertices([:a, :b]) |> Graph.add_edge(:a, :b)
-      ...> [:a, :b] = Graph.vertices(g)
-      ...> g = Graph.replace_vertex(g, :a, :c)
-      ...> [:b, :c] = Graph.vertices(g)
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:b, :c}, {:c, :a}, {:c, :d}])
+      ...> [:a, :b, :c, :d] = Graph.vertices(g)
+      ...> g = Graph.replace_vertex(g, :a, :e)
+      ...> [:b, :c, :d, :e] = Graph.vertices(g)
       ...> Graph.edges(g)
-      [%Graph.Edge{v1: :c, v2: :b}]
+      [%Graph.Edge{v1: :b, v2: :c}, %Graph.Edge{v1: :c, v2: :d}, %Graph.Edge{v1: :c, v2: :e}, %Graph.Edge{v1: :e, v2: :b}]
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
   def replace_vertex(%__MODULE__{vertices: vs, vertex_labels: labels, out_edges: oe, in_edges: ie, edges: em} = g, v, rv) do
@@ -839,6 +864,11 @@ defmodule Graph do
       ...> g = Graph.split_edge(g, :a, :c, :b)
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, weight: 2}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_vertices([:a, :c]) |> Graph.add_edge(:a, :c, weight: 2)
+      ...> g = Graph.split_edge(g, :a, :c, :b)
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b, weight: 2}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
   def split_edge(%__MODULE__{type: :undirected} = g, v1, v2, v3) do
@@ -901,6 +931,11 @@ defmodule Graph do
       ...> %Graph{} = g = Graph.update_labelled_edge(g, :a, :b, :bar, weight: 2, label: :foo)
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
+      ...> %Graph{} = g = Graph.update_labelled_edge(g, :a, :b, :bar, weight: 2, label: :foo)
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec update_labelled_edge(t, vertex, vertex, label, Edge.edge_opts) :: t | {:error, :no_such_edge}
   def update_labelled_edge(%__MODULE__{type: :undirected} = g, v1, v2, old_label, opts) when is_list(opts) do
@@ -945,6 +980,12 @@ defmodule Graph do
   ## Example
 
     iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}])
+    ...> g = Graph.delete_edge(g, :a, :b)
+    ...> [:a, :b] = Graph.vertices(g)
+    ...> Graph.edges(g)
+    []
+
+    iex> g = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}])
     ...> g = Graph.delete_edge(g, :a, :b)
     ...> [:a, :b] = Graph.vertices(g)
     ...> Graph.edges(g)
@@ -995,6 +1036,12 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}]
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}])
+      ...> g = Graph.delete_edge(g, :a, :b, :foo)
+      ...> [:a, :b] = Graph.vertices(g)
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b, label: nil}]
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}])
       ...> g = Graph.delete_edge(g, :a, :b, :foo)
       ...> [:a, :b] = Graph.vertices(g)
       ...> Graph.edges(g)
@@ -1096,6 +1143,11 @@ defmodule Graph do
       ...> g = Graph.delete_edges(g, :a, :b)
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :b, v2: :a}]
+
+      iex> g = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :a}])
+      ...> g = Graph.delete_edges(g, :a, :b)
+      ...> Graph.edges(g)
+      []
   """
   @spec delete_edges(t, vertex, vertex) :: t
   def delete_edges(%__MODULE__{type: :undirected} = g, v1, v2) do
@@ -1340,6 +1392,8 @@ defmodule Graph do
 
   If there is no k-core in the graph for the provided value of `k`, an empty `Graph` is returned.
 
+  If a negative integer is provided for `k`, a RuntimeError will be raised.
+
   NOTE: For performance reasons, k-core calculations make use of ETS. If you are
   sensitive to the number of concurrent ETS tables running in your system, you should
   be aware of it's usage here. 2 tables are used, and they are automatically cleaned
@@ -1417,6 +1471,11 @@ defmodule Graph do
 
   The k-coreness of a vertex is defined as the maximum value of `k`
   for which `v` is found in the corresponding k-core of graph `g`.
+
+  NOTE: This function decomposes all k-core components to determine the coreness
+  of a vertex - if you will be trying to determine the coreness of many vertices,
+  it is recommended to use `k_core_components/1` and then lookup the coreness of a vertex
+  by querying the resulting map.
   """
   @spec coreness(t, vertex) :: non_neg_integer
   def coreness(%__MODULE__{} = g, v) do

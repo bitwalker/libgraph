@@ -38,6 +38,16 @@ defmodule Graph.Reducers.Dfs do
       ...> g = Graph.add_edges(g, [{1, 3}, {1, 4}, {3, 2}, {2, 4}])
       ...> #{__MODULE__}.reduce(g, [], fn v, acc -> {:next, [v|acc]} end)
       [4, 2, 3, 1]
+
+      iex> g = Graph.new |> Graph.add_vertices([1, 2, 3, 4, 5])
+      ...> g = Graph.add_edges(g, [{1, 3}, {1, 4}, {3, 2}, {2, 4}, {4, 5}])
+      ...> #{__MODULE__}.reduce(g, [], fn 5, acc -> {:skip, acc}; v, acc -> {:next, [v|acc]} end)
+      [4, 2, 3, 1]
+
+      iex> g = Graph.new |> Graph.add_vertices([1, 2, 3, 4, 5])
+      ...> g = Graph.add_edges(g, [{1, 3}, {1, 4}, {3, 2}, {2, 4}, {4, 5}])
+      ...> #{__MODULE__}.reduce(g, [], fn 4, acc -> {:halt, acc}; v, acc -> {:next, [v|acc]} end)
+      [2, 3, 1]
   """
   def reduce(%Graph{vertices: vs} = g, acc, fun) when is_function(fun, 2) do
     traverse(Map.keys(vs), g, MapSet.new, fun, acc)

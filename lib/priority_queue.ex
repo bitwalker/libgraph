@@ -32,6 +32,14 @@ defmodule PriorityQueue do
       ...> {result, _} = PriorityQueue.pop(pq)
       ...> result
       {:value, :foo}
+
+      iex> pq = PriorityQueue.new
+      ...> pq = PriorityQueue.push(pq, :foo, 1)
+      ...> {{:value, :foo}, pq} = PriorityQueue.pop(pq)
+      ...> pq = PriorityQueue.push(pq, :bar, 1)
+      ...> {result, _} = PriorityQueue.pop(pq)
+      ...> result
+      {:value, :bar}
   """
   @spec push(t, term, integer) :: t
   def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority) when is_integer(priority) and size > 0 do

@@ -186,6 +186,30 @@ defmodule GraphTest do
     assert [:a, :b, :c, :d] = components[3]
   end
 
+  test "coreness/2" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
+      |> Graph.add_edges([
+      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
+      {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
+    ])
+    assert 3 = Graph.coreness(g, :a)
+  end
+
+  test "degeneracy_core/1" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
+      |> Graph.add_edges([
+      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
+      {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
+    ])
+    assert 3 = Graph.degeneracy(g)
+    dg = Graph.degeneracy_core(g)
+    assert [:a, :b, :c, :d] = Graph.vertices(dg)
+  end
+
   @tag timeout: 120_000
   @enron_emails Path.join([__DIR__, "fixtures", "email-Enron.txt"])
   test "degeneracy/1 - Enron emails" do
