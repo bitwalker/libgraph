@@ -1342,7 +1342,7 @@ defmodule Graph do
 
   NOTE: For performance reasons, k-core calculations make use of ETS. If you are
   sensitive to the number of concurrent ETS tables running in your system, you should
-  be aware of it's usage here. Only 1 table is used, and it is automatically cleaned
+  be aware of it's usage here. 2 tables are used, and they are automatically cleaned
   up when this function returns.
   """
   @spec k_core(t, k :: non_neg_integer) :: t
@@ -1437,41 +1437,41 @@ defmodule Graph do
     # - A k-core is not necessarily connected.
     # - The core number for each vertex is the highest k-core it is a member of
     # - A vertex in a k-core will be, by definition, in a (k-1)-core (cores are nested)
-    table = :ets.new(:k_cores, [:set, keypos: 1])
+    degrees = :ets.new(:k_cores, [:set, keypos: 1])
+    l = :ets.new(:k_cores_l, [:set, keypos: 1])
     try do
       # Since we are making many modifications to the graph as we work on it,
       # it is more performant to store the list of vertices and their degree in ETS
       # and work on it there. This is not strictly necessary, but makes the algorithm
       # easier to read and is faster, so unless there is good reason to avoid ETS here
       # I think it's a fair compromise.
-      Enum.each(vs, fn {_id, v} ->
-        d = out_degree(g, v)
-        :ets.insert(table, {v, d})
-      end)
-      decompose_cores(table, g, 1, [])
+      for {_id, v} <- vs do
+        :ets.insert(degrees, {v, out_degree(g, v)})
+      end
+      decompose_cores(degrees, l, g, 1)
     after
-      :ets.delete(table)
+      :ets.delete(degrees)
+      :ets.delete(l)
     end
   end
-  defp decompose_cores(table, g, k, l) do
-    case :ets.info(table, :size) do
+  defp decompose_cores(degrees, l, g, k) do
+    case :ets.info(degrees, :size) do
       0 ->
-        l
+        Enum.reverse(:ets.tab2list(l))
       _ ->
         # Select all v that have a degree less than `k`
-        case :ets.select(table, [{{:'$1', :'$2'}, [{:'<', :'$2', k}], [:'$1']}]) do
+        case :ets.select(degrees, [{{:'$1', :'$2'}, [{:'<', :'$2', k}], [:'$1']}]) do
           [] ->
-            decompose_cores(table, g, k+1, l)
+            decompose_cores(degrees, l, g, k+1)
           matches ->
-            l2 =
-              Enum.reduce(matches, l, fn v, acc ->
-                :ets.delete(table, v)
-                for neighbor <- out_neighbors(g, v), not List.keymember?(acc, neighbor, 0) do
-                  :ets.update_counter(table, neighbor, {2, -1})
-                end
-                [{v, k-1}|acc]
-              end)
-            decompose_cores(table, g, k, l2)
+            for v <- matches do
+              :ets.delete(degrees, v)
+              for neighbor <- out_neighbors(g, v), not :ets.member(l, neighbor) do
+                :ets.update_counter(degrees, neighbor, {2, -1})
+              end
+              :ets.insert(l, {v, k-1})
+            end
+            decompose_cores(degrees, l, g, k)
         end
     end
   end
