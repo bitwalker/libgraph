@@ -25,10 +25,10 @@ defmodule Graph.Serializers.DOT do
     encode_label(Map.get(vl, id, v))
   end
 
-  defp encode_label(label) when is_binary(label), do: label
+  defp encode_label(label) when is_binary(label), do: quoted(label)
   defp encode_label(label) when is_integer(label), do: Integer.to_string(label)
   defp encode_label(label) when is_float(label), do: Float.to_string(label)
-  defp encode_label(label) when is_atom(label), do: Atom.to_string(label)
+  defp encode_label(label) when is_atom(label), do: quoted(Atom.to_string(label))
   defp encode_label(label), do: quoted("#{inspect label}")
 
   defp quoted(str) do
