@@ -1384,6 +1384,65 @@ defmodule Graph do
   defdelegate loop_vertices(g), to: Graph.Directed
 
   @doc """
+  Detects all maximal cliques in the provided graph.
+
+  Returns a list of cliques, where each clique is a list of vertices in the clique.
+
+  A clique is a subset `vs` of the vertices in the given graph, which together form a complete graph;
+  or put another way, every vertex in `vs` is connected to all other vertices in `vs`.
+  """
+  @spec cliques(t) :: [[vertex]]
+  def cliques(%__MODULE__{type: :directed}) do
+    raise "cliques/1 can not be called on a directed graph"
+  end
+  def cliques(%__MODULE__{} = g) do
+    # We do vertex ordering as described in Bron-Kerbosch
+    # to improve the worst-case performance of the algorithm
+    p =
+      g
+      |> k_core_components()
+      |> Enum.sort_by(fn {k, _} -> k end, fn a, b -> a >= b end)
+      |> Stream.flat_map(fn {_, vs} -> vs end)
+      |> Enum.map(&Graph.Utils.vertex_id/1)
+    g
+    |> detect_cliques(_r = [], p, _x = [], _acc = [])
+    |> Enum.reverse
+  end
+
+  @doc """
+  Detects all maximal cliques of degree `k`.
+
+  Returns a list of cliques, where each clique is a list of vertices in the clique.
+  """
+  @spec k_cliques(t, non_neg_integer) :: [[vertex]]
+  def k_cliques(%__MODULE__{type: :directed}, _k) do
+    raise "k_cliques/2 can not be called on a directed graph"
+  end
+  def k_cliques(%__MODULE__{} = g, k) when is_integer(k) and k >= 0 do
+    g
+    |> cliques()
+    |> Enum.filter(fn clique -> length(clique) == k end)
+  end
+
+  # r is a maximal clique
+  defp detect_cliques(%__MODULE__{vertices: vs}, r, [], [], acc) do
+    mapped =
+      r
+      |> Stream.map(&Map.get(vs, &1))
+      |> Enum.reverse()
+    [mapped|acc]
+  end
+  # r is a subset of another clique
+  defp detect_cliques(_g, _r, [], _x, acc), do: acc
+  defp detect_cliques(%__MODULE__{in_edges: ie, out_edges: oe} = g, r, [pivot|p], x, acc) do
+    n = MapSet.union(Map.get(ie, pivot, MapSet.new), Map.get(oe, pivot, MapSet.new))
+    p2 = Enum.filter(p, &Enum.member?(n, &1))
+    x2 = Enum.filter(x, &Enum.member?(n, &1))
+    acc2 = detect_cliques(g, [pivot|r], p2, x2, acc)
+    detect_cliques(g, r, p, [pivot|x], acc2)
+  end
+
+  @doc """
   Calculates the k-core for a given graph and value of `k`.
 
   A k-core of the graph is a maximal subgraph of `g` which contains vertices of which all

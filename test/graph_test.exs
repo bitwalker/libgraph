@@ -140,6 +140,23 @@ defmodule GraphTest do
     assert [:b, :c] = Graph.in_neighbors(g, :d)
   end
 
+  test "cliques/1" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f])
+      |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:d, :e}, {:e, :a}, {:e, :b}, {:d, :f}])
+    cliques = Graph.cliques(g)
+    assert [[:a, :b, :e], [:b, :c], [:c, :d], [:d, :e], [:d, :f]] = cliques
+  end
+
+  test "k_cliques/2" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f])
+      |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:d, :e}, {:e, :a}, {:e, :b}, {:d, :f}])
+    assert [[:a, :b, :e]] = Graph.k_cliques(g, 3)
+  end
+
   test "k_core/2" do
     g =
       Graph.new(type: :undirected)
