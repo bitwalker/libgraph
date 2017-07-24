@@ -186,6 +186,17 @@ defmodule GraphTest do
       ])
     three_core = Graph.k_core(g, 3)
     assert Graph.vertices(three_core) == [:a, :b, :c, :d, :f, :g, :h, :i]
+
+    g =
+      Graph.new
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
+      |> Graph.add_edges([
+      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :a}, {:b, :c}, {:b, :d}, {:c, :a}, {:c, :b}, {:c, :d}, {:d, :a}, {:d, :b}, {:d, :c},
+      {:d, :e}, {:e, :d}, {:e, :f}, {:f, :e}, {:f, :g}, {:g, :f}, {:g, :h}, {:h, :g}, {:h, :i}, {:i, :h}, {:i, :f}, {:f, :i}, {:h, :f},
+      {:f, :h}, {:g, :i}, {:i, :g}
+    ])
+    three_core = Graph.k_core(g, 3)
+    assert Graph.vertices(three_core) == [:a, :b, :c, :d, :f, :g, :h, :i]
   end
 
   test "k_core_components/1" do
