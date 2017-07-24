@@ -1490,9 +1490,15 @@ defmodule Graph do
   """
   @spec k_core_components(t) :: %{k :: non_neg_integer => [vertex]}
   def k_core_components(%__MODULE__{} = g) do
-    g
-    |> decompose_cores()
-    |> Enum.group_by(fn {_, k} -> k end, fn {v, _} -> v end)
+    res =
+      g
+      |> decompose_cores()
+      |> Enum.group_by(fn {_, k} -> k end, fn {v, _} -> v end)
+    if map_size(res) > 0 do
+      res
+    else
+      %{0 => []}
+    end
   end
 
   @doc """
@@ -1503,14 +1509,11 @@ defmodule Graph do
   """
   @spec degeneracy(t) :: non_neg_integer
   def degeneracy(%__MODULE__{} = g) do
-    res =
+    {_, k} =
       g
       |> decompose_cores()
-      |> Enum.max_by(fn {_, k} -> k end, fn -> nil end)
-    case res do
-      {_, k} -> k
-      _ -> 0
-    end
+      |> Enum.max_by(fn {_, k} -> k end, fn -> {nil, 0} end)
+    k
   end
 
   @doc """
@@ -1522,7 +1525,12 @@ defmodule Graph do
   """
   @spec degeneracy_core(t) :: t
   def degeneracy_core(%__MODULE__{} = g) do
-    k_core(g, degeneracy(g))
+    {_, core} =
+      g
+      |> decompose_cores()
+      |> Enum.group_by(fn {_, k} -> k end, fn {v, _} -> v end)
+      |> Enum.max_by(fn {k, _} -> k end, fn -> {0, []} end)
+    Graph.subgraph(g, core)
   end
 
   @doc """
