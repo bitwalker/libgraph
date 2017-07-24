@@ -1592,7 +1592,7 @@ defmodule Graph do
           matches ->
             for v <- matches do
               :ets.delete(degrees, v)
-              for neighbor <- out_neighbors(g, v), not :ets.member(l, neighbor) do
+              for neighbor <- out_neighbors(g, v), not :ets.member(l, neighbor) and v != neighbor do
                 :ets.update_counter(degrees, neighbor, {2, -1})
               end
               :ets.insert(l, {v, k-1})

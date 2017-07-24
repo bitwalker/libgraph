@@ -204,7 +204,7 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
+      {:a, :a}, {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
       {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
     ])
     components = Graph.k_core_components(g)
