@@ -155,6 +155,26 @@ defmodule Graph.Model.Test do
     end
   end
 
+  property "the degeneracy core of a DAG is the maximum k_core of a given graph" do
+    forall g <- dag() do
+      k_cores = Graph.k_core_components(g)
+      degeneracy = Graph.degeneracy(g)
+      degeneracy_core = g |> Graph.degeneracy_core |> Graph.vertices
+      {k, core} = Enum.max_by(k_cores, fn {k, _} -> k end)
+      degeneracy == k and MapSet.equal?(MapSet.new(core), MapSet.new(degeneracy_core))
+    end
+  end
+
+  property "the degeneracy core of a DCG is the maximum k_core of a given graph" do
+    forall g <- dcg() do
+      k_cores = Graph.k_core_components(g)
+      degeneracy = Graph.degeneracy(g)
+      degeneracy_core = g |> Graph.degeneracy_core |> Graph.vertices
+      {k, core} = Enum.max_by(k_cores, fn {k, _} -> k end)
+      degeneracy == k and MapSet.equal?(MapSet.new(core), MapSet.new(degeneracy_core))
+    end
+  end
+
   ## Private
 
   def dag() do
