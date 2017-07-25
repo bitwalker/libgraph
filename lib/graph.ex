@@ -541,48 +541,56 @@ defmodule Graph do
 
   @doc """
   Returns the label for the given vertex.
-  If no label was assigned, it returns nil.
+  If no label was assigned, it returns [].
 
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertex(:a) |> Graph.label_vertex(:a, :my_label)
-      ...> Graph.vertex_label(g, :a)
-      :my_label
+      ...> Graph.vertex_labels(g, :a)
+      [:my_label]
   """
-  @spec vertex_label(t, vertex) :: term | nil
-  def vertex_label(%__MODULE__{vertex_labels: labels}, v) do
+  @spec vertex_labels(t, vertex) :: term | []
+  def vertex_labels(%__MODULE__{vertex_labels: labels}, v) do
     with v1_id <- Graph.Utils.vertex_id(v),
          true <- Map.has_key?(labels, v1_id) do
       Map.get(labels, v1_id)
     else
-      _ -> nil
+      _ -> []
     end
   end
 
   @doc """
   Adds a new vertex to the graph. If the vertex is already present in the graph, the add is a no-op.
 
-  You can provide an optional label for the vertex, aside from the variety of uses this has for working
+  You can provide optional labels for the vertex, aside from the variety of uses this has for working
   with graphs, labels will also be used when exporting a graph in DOT format.
 
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertex(:a, :mylabel) |> Graph.add_vertex(:a)
       ...> [:a] = Graph.vertices(g)
-      ...> Graph.vertex_label(g, :a)
-      :mylabel
+      ...> Graph.vertex_labels(g, :a)
+      [:mylabel]
+
+      iex> g = Graph.new |> Graph.add_vertex(:a, [:mylabel, :other])
+      ...> Graph.vertex_labels(g, :a)
+      [:mylabel, :other]
   """
-  @spec add_vertex(t, vertex) :: t
-  def add_vertex(%__MODULE__{vertices: vs, vertex_labels: vl} = g, v, label \\ nil) do
+  @spec add_vertex(t, vertex, label) :: t
+  def add_vertex(g, v, labels \\ [])
+
+  def add_vertex(%__MODULE__{vertices: vs, vertex_labels: vl} = g, v, labels) when is_list(labels) do
     id = Graph.Utils.vertex_id(v)
     case Map.get(vs, id) do
-      nil when is_nil(label) ->
-        %__MODULE__{g | vertices: Map.put(vs, id, v)}
       nil ->
-        %__MODULE__{g | vertices: Map.put(vs, id, v), vertex_labels: Map.put(vl, id, label)}
+        %__MODULE__{g | vertices: Map.put(vs, id, v), vertex_labels: Map.put(vl, id, labels)}
       _ ->
         g
     end
+  end
+
+  def add_vertex(g, v, label) do
+    add_vertex(g, v, [label])
   end
 
   @doc """
@@ -600,27 +608,37 @@ defmodule Graph do
   end
 
   @doc """
-  Updates the label for the given vertex.
+  Updates the labels for the given vertex.
 
   If no such vertex exists in the graph, `{:error, {:invalid_vertex, v}}` is returned.
 
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertex(:a, :foo)
-      ...> :foo = Graph.vertex_label(g, :a)
+      ...> [:foo] = Graph.vertex_labels(g, :a)
       ...> g = Graph.label_vertex(g, :a, :bar)
-      ...> Graph.vertex_label(g, :a)
-      :bar
+      ...> Graph.vertex_labels(g, :a)
+      [:foo, :bar]
+
+      iex> g = Graph.new |> Graph.add_vertex(:a, [:foo, :bar])
+      ...> Graph.vertex_labels(g, :a)
+      [:foo, :bar]
   """
   @spec label_vertex(t, vertex, term) :: t | {:error, {:invalid_vertex, vertex}}
-  def label_vertex(%__MODULE__{vertices: vs, vertex_labels: labels} = g, v, label) do
+  def label_vertex(%__MODULE__{vertices: vs, vertex_labels: labels} = g, v, vlabels) when is_list(vlabels) do
     with v_id <- Graph.Utils.vertex_id(v),
          true <- Map.has_key?(vs, v_id),
-         labels <- Map.put(labels, v_id, label) do
+         old_vlabels <- Map.get(labels, v_id),
+         new_vlabels <- old_vlabels ++ vlabels,
+         labels <- Map.put(labels, v_id, new_vlabels) do
       %__MODULE__{g | vertex_labels: labels}
     else
       _ -> {:error, {:invalid_vertex, v}}
     end
+  end
+
+  def label_vertex(g, v, vlabel)do
+    label_vertex(g, v, [vlabel])
   end
 
   @doc """
