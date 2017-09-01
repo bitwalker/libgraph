@@ -620,7 +620,8 @@ defmodule Graph do
       ...> Graph.vertex_labels(g, :a)
       [:foo, :bar]
 
-      iex> g = Graph.new |> Graph.add_vertex(:a, [:foo, :bar])
+      iex> g = Graph.new |> Graph.add_vertex(:a)
+      ...> g = Graph.label_vertex(g, :a, [:foo, :bar])
       ...> Graph.vertex_labels(g, :a)
       [:foo, :bar]
   """
