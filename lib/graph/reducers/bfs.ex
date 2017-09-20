@@ -26,7 +26,7 @@ defmodule Graph.Reducers.Bfs do
   end
 
   @doc """
-  Performs a depth-first traversal of the graph, applying the provided reducer function to
+  Performs a breadth-first traversal of the graph, applying the provided reducer function to
   each new vertex encountered and the accumulator.
 
   NOTE: The algorithm will follow lower-weighted edges first.
