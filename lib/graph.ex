@@ -90,8 +90,8 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
       ...> g = g |> Graph.add_edges([{:a, :b}, {:b, :c}])
-      ...> Graph.info(g)
-      %{type: :directed, num_vertices: 4, num_edges: 2, size_in_bytes: 1064}
+      ...> match?(%{type: :directed, num_vertices: 4, num_edges: 2}, Graph.info(g))
+      true
   """
   @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
   def info(%__MODULE__{type: type} = g) do
