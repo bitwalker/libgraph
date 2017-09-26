@@ -5,6 +5,15 @@ defmodule GraphTest do
   alias Graph.Edge
   alias Graph.Test.Generators
 
+  test "delete vertex" do
+    g = Graph.new()
+    g = Graph.add_vertex(g, :v1, :labelA)
+    g = Graph.delete_vertex(g, :v1)
+    g = Graph.add_vertex(g, :v1, :labelB)
+
+    assert :labelB = Graph.vertex_label(g, :v1)
+  end
+
   test "inspect" do
     g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])
     ug = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])

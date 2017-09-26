@@ -701,16 +701,18 @@ defmodule Graph do
       []
   """
   @spec delete_vertex(t, vertex) :: t
-  def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertices: vs} = g, v) do
+  def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertices: vs, vertex_labels: ls} = g, v) do
     with v_id <- Graph.Utils.vertex_id(v),
          true <- Map.has_key?(vs, v_id),
          oe <- Map.delete(oe, v_id),
          ie <- Map.delete(ie, v_id),
-         vs <- Map.delete(vs, v_id) do
+         vs <- Map.delete(vs, v_id),
+         ls <- Map.delete(ls, v_id) do
       oe = for {id, ns} <- oe, do: {id, MapSet.delete(ns, v_id)}, into: %{}
       em = for {{id1, id2}, _} = e <- em, v_id != id1 && v_id != id2, do: e, into: %{}
       %__MODULE__{g |
                   vertices: vs,
+                  vertex_labels: ls,
                   out_edges: oe,
                   in_edges: ie,
                   edges: em}
