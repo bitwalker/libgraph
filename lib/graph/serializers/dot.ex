@@ -22,9 +22,13 @@ defmodule Graph.Serializers.DOT do
   end
 
   defp get_vertex_label(%Graph{vertex_labels: vl}, id, v) do
-    encode_label(Map.get(vl, id, v))
+    case Map.get(vl, id) do
+      []    -> encode_label(v)
+      label -> encode_label(label)
+    end
   end
 
+  defp encode_label([h|_] = label) when length(label) == 1, do: encode_label(h)
   defp encode_label(label) when is_binary(label), do: quoted(label)
   defp encode_label(label) when is_integer(label), do: Integer.to_string(label)
   defp encode_label(label) when is_float(label), do: Float.to_string(label)

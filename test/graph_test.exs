@@ -11,7 +11,7 @@ defmodule GraphTest do
     g = Graph.delete_vertex(g, :v1)
     g = Graph.add_vertex(g, :v1, :labelB)
 
-    assert :labelB = Graph.vertex_label(g, :v1)
+    assert [:labelB] = Graph.vertex_labels(g, :v1)
   end
 
   test "inspect" do
