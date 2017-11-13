@@ -91,6 +91,19 @@ NOTE: While this library is primarily focused on the `Graph` data structure it d
 of a priority queue (you can find it under the `PriorityQueue` module), designed for use with graphs specifically, as it
 considers lower integer values higher priority, which is perfect for the kinds of graph algorithms you need a priority queue for.
 
+## Contributing
+
+To run the test suite you will need to run `mix eqc.install --mini` once you've cloned the repo and fetched dependencies.
+
+If you have changes in mind that are significant or potentially time consuming, please open a RFC-style PR first, where we
+can discuss your plans first. I don't want you to spend all your time crafting a PR that I ultimately reject because I don't
+think it's a good fit or is too large for me to review. Not that I plan to reject PRs in general, but I have to be careful to
+balance features with maintenance burden, or I will quickly be unable to manage the project.
+
+Please ensure that you adhere to a commit style where logically related changes are in a single commit, or broken up in a way that
+eases review if necessary. Keep commit subject lines informative, but short, and provide additional detail in the extended message text
+if needed. If you can, mention relevant issue numbers in either the subject or the extended message.
+
 ## Roadmap
 
 Please open an issue if you have a feature request!
