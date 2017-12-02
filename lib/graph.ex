@@ -385,33 +385,29 @@ defmodule Graph do
   """
   @spec edges(t, vertex) :: [Edge.t]
   def edges(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta, vertices: vs}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
-         {:ok, v_in} <- Map.fetch(ie, v_id),
-         {:ok, v_out} <- Map.fetch(oe, v_id),
-         v_all <- MapSet.union(v_in, v_out) do
-      Enum.flat_map(v_all, fn v2_id ->
-        case Map.get(meta, {v_id, v2_id}) do
-          nil ->
-            case Map.get(meta, {v2_id, v_id}) do
-              nil ->
-                []
-              edge_meta when is_map(edge_meta) ->
-                v2 = Map.get(vs, v2_id)
-                for {label, weight} <- edge_meta do
-                  Edge.new(v2, v, label: label, weight: weight)
-                end
-            end
-          edge_meta when is_map(edge_meta) ->
-            v2 = Map.get(vs, v2_id)
-            for {label, weight} <- edge_meta do
-              Edge.new(v, v2, label: label, weight: weight)
-            end
-        end
-      end)
-    else
-      _ ->
-        []
-    end
+    v_id = Graph.Utils.vertex_id(v)
+    v_in = Map.get(ie, v_id) || MapSet.new
+    v_out = Map.get(oe, v_id) || MapSet.new
+    v_all = MapSet.union(v_in, v_out)
+    Enum.flat_map(v_all, fn v2_id ->
+      case Map.get(meta, {v_id, v2_id}) do
+        nil ->
+          case Map.get(meta, {v2_id, v_id}) do
+            nil ->
+              []
+            edge_meta when is_map(edge_meta) ->
+              v2 = Map.get(vs, v2_id)
+              for {label, weight} <- edge_meta do
+                Edge.new(v2, v, label: label, weight: weight)
+              end
+          end
+        edge_meta when is_map(edge_meta) ->
+          v2 = Map.get(vs, v2_id)
+          for {label, weight} <- edge_meta do
+            Edge.new(v, v2, label: label, weight: weight)
+          end
+      end
+    end)
   end
 
   @doc """
