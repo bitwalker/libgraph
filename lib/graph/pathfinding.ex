@@ -38,7 +38,7 @@ defmodule Graph.Pathfinding do
       q =
         a_out
         |> Stream.map(fn id -> {id, cost(g, a_id, id, hfun)} end)
-        |> Enum.reduce(q, fn {id, cost}, q -> PriorityQueue.push(q, {a_id, id}, cost) end)
+        |> Enum.reduce(q, fn {id, cost}, q -> PriorityQueue.push(q, {a_id, id, edge_weight(g, a_id, id)}, cost) end)
       case do_bfs(q, g, b_id, tree, hfun) do
         nil ->
           nil
@@ -78,10 +78,10 @@ defmodule Graph.Pathfinding do
 
   defp do_bfs(q, %Graph{out_edges: oe} = g, target_id, %Graph{vertices: vs_tree} = tree, hfun) do
     case PriorityQueue.pop(q) do
-      {{:value, {v_id, ^target_id}}, _q1} ->
+      {{:value, {v_id, ^target_id, _}}, _q1} ->
         v_id_tree = Graph.Utils.vertex_id(v_id)
         construct_path(v_id_tree, tree, [target_id])
-      {{:value, {v1_id, v2_id}}, q1} ->
+      {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
         v2_id_tree = Graph.Utils.vertex_id(v2_id)
         if Map.has_key?(vs_tree, v2_id_tree) do
           do_bfs(q1, g, target_id, tree, hfun)
@@ -96,8 +96,9 @@ defmodule Graph.Pathfinding do
                 |> Graph.add_edge(v2_id, v1_id)
               q2 =
                 v2_out
-                |> Enum.map(fn id -> {id, cost(g, v2_id, id, hfun)} end)
-                |> Enum.reduce(q1, fn {id, cost}, q -> PriorityQueue.push(q, {v2_id, id}, cost) end)
+                |> Enum.map(fn id -> {id, v2_acc_weight + cost(g, v2_id, id, hfun)} end)
+                |> Enum.reduce(q1, fn {id, cost}, q -> PriorityQueue.push(q, {v2_id, id,
+                  v2_acc_weight + edge_weight(g, v2_id, id)}, cost) end)
               do_bfs(q2, g, target_id, tree, hfun)
           end
         end
