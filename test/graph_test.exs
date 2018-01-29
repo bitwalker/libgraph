@@ -104,6 +104,20 @@ defmodule GraphTest do
     assert [[:a, :c, :d, :e], [:a, :b, :d, :e], [:a, :b, :c, :d, :e]] = Graph.get_paths(g, :a, :e)
   end
 
+  test "find all paths on loopy graph" do
+    g = Graph.new
+        |> Graph.add_edge(:a, :b)
+        |> Graph.add_edge(:a, :c)
+        |> Graph.add_edge(:b, :d)
+        |> Graph.add_edge(:c, :d)
+        |> Graph.add_edge(:d, :e)
+        |> Graph.add_edge(:e, :d)
+        |> Graph.add_edge(:d, :f)
+        |> Graph.add_edge(:f, :d)
+
+    assert [[:a, :c, :d], [:a, :b, :d]] == Graph.get_paths(g, :a, :d)
+  end
+
   test "find shortest path" do
     g = build_basic_cyclic_graph()
 

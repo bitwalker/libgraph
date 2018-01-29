@@ -119,13 +119,13 @@ defmodule Graph.Pathfinding do
   end
 
   defp dfs(%Graph{} = g, neighbors, target_id, path, paths) do
-    paths =
+    {paths, visited} =
       if MapSet.member?(neighbors, target_id) do
-        [Enum.reverse([target_id|path])|paths]
+        {[Enum.reverse([target_id|path])|paths], [target_id|path]}
       else
-        paths
+        {paths, path}
       end
-    neighbors = MapSet.difference(neighbors, MapSet.new(path))
+    neighbors = MapSet.difference(neighbors, MapSet.new(visited))
     do_dfs(g, MapSet.to_list(neighbors), target_id, path, paths)
   end
 
@@ -136,6 +136,7 @@ defmodule Graph.Pathfinding do
     case Map.get(oe, next_neighbor_id) do
       nil ->
         do_dfs(g, neighbors, target_id, path, acc)
+
       next_neighbors ->
         case dfs(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
           nil ->
