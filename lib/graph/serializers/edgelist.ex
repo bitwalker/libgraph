@@ -7,7 +7,6 @@ defmodule Graph.Serializers.Edgelist do
   use Graph.Serializer
   alias Graph.Serializer
 
-  @doc "Serialize a `Graph` object to an edgelist"
   @spec serialize(Graph.t()) :: {:ok, String.t()}
   def serialize(g) do
     result = "#{serialize_edges(g)}\n"
@@ -27,10 +26,10 @@ defmodule Graph.Serializers.Edgelist do
         {v_label, v2_label}
       end)
 
-        case edges do
-          [] -> acc
-          _ -> acc ++ edges
-        end
+      case edges do
+        [] -> acc
+        _ -> acc ++ edges
+      end
     end)
     |> Enum.map(fn {v_label, v2_label} -> "#{v_label} #{v2_label}" end)
     |> Enum.join("\n")
