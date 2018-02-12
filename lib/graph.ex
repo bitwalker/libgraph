@@ -140,6 +140,11 @@ defmodule Graph do
     Graph.Serializers.DOT.serialize(g)
   end
 
+  @spec to_edgelist(t) :: {:ok, binary} | {:error, term}
+  def to_edgelist(%__MODULE__{} = g) do
+    Graph.Serializers.Edgelist.serialize(g)
+  end
+
   @doc """
   Returns the number of edges in the graph.
 
