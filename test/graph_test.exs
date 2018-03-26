@@ -35,9 +35,13 @@ defmodule GraphTest do
     assert "#Graph<type: directed, num_vertices: 151, num_edges: 150>" = str
   end
 
+  test "graph with float weights" do
+    g = build_floatweight_graph()
+    assert %{type: :directed} = Graph.info(g)
+  end
+
   test "get info about graph" do
     g = build_basic_cyclic_graph()
-
     assert %{type: :directed, num_vertices: 5, num_edges: 7} = Graph.info(g)
   end
 
@@ -141,6 +145,12 @@ defmodule GraphTest do
 
     assert ^shortest_len = length(shortest_dg)
     assert ^shortest_len = length(shortest_g)
+  end
+
+  test "shortest path for floatweight graph" do
+    g = build_floatweight_graph()
+    shortest_g = Graph.dijkstra(g, :a, :d)
+    assert shortest_g == [:a, :b, :c, :d]
   end
 
   test "shortest path for complex graph" do
@@ -285,6 +295,14 @@ defmodule GraphTest do
     assert 1_858 = Graph.num_vertices(g)
     assert 12_534 = Graph.num_edges(g)
     assert 20 = Graph.degeneracy(g)
+  end
+
+  defp build_floatweight_graph do
+    Graph.new
+    |> Graph.add_edge(:a, :b, weight: 0.1)
+    |> Graph.add_edge(:b, :c, weight: 0.1)
+    |> Graph.add_edge(:c, :d, weight: 0.1)
+    |> Graph.add_edge(:a, :d, weight: 0.3000001)
   end
 
   defp build_basic_cyclic_graph do

@@ -42,7 +42,7 @@ defmodule PriorityQueue do
       {:value, :bar}
   """
   @spec push(t, term, integer) :: t
-  def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority) when is_integer(priority) and size > 0 do
+  def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority) when (is_integer(priority) or is_float(priority)) and size > 0 do
     case :gb_trees.lookup(priority, tree) do
       :none ->
         %__MODULE__{pq | priorities: :gb_trees.insert(priority, :queue.in(term, :queue.new), tree)}
@@ -50,10 +50,10 @@ defmodule PriorityQueue do
         %__MODULE__{pq | priorities: :gb_trees.update(priority, :queue.in(term, q), tree)}
     end
   end
-  def push(%__MODULE__{priorities: {0, _} = tree} = pq, term, priority) when is_integer(priority) do
+  def push(%__MODULE__{priorities: {0, _} = tree} = pq, term, priority) when is_integer(priority) or is_float(priority) do
     %__MODULE__{pq | priorities: :gb_trees.insert(priority, :queue.in(term, :queue.new), tree)}
   end
-  def push(%__MODULE__{priorities: nil} = pq, term, priority) when is_integer(priority) do
+  def push(%__MODULE__{priorities: nil} = pq, term, priority) when is_integer(priority) or is_float(priority) do
     %__MODULE__{pq | priorities: :gb_trees.insert(priority, :queue.in(term, :queue.new), :gb_trees.empty)}
   end
 
