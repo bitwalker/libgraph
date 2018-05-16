@@ -23,7 +23,7 @@ defmodule PriorityQueue do
   @doc """
   Push a new element into the queue with the given priority.
 
-  Priorities must be integer values.
+  Priorities must be integer or float values.
 
   ## Example
 
@@ -41,7 +41,7 @@ defmodule PriorityQueue do
       ...> result
       {:value, :bar}
   """
-  @spec push(t, term, integer) :: t
+  @spec push(t, term, integer | float) :: t
   def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority) when (is_integer(priority) or is_float(priority)) and size > 0 do
     case :gb_trees.lookup(priority, tree) do
       :none ->

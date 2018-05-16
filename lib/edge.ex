@@ -13,10 +13,10 @@ defmodule Graph.Edge do
   @type t :: %__MODULE__{
     v1: Graph.vertex,
     v2: Graph.vertex,
-    weight: integer,
+    weight: integer | float,
     label: term
   }
-  @type edge_opt :: {:weight, integer}
+  @type edge_opt :: {:weight, integer | float}
                   | {:label, term}
   @type edge_opts :: [edge_opt]
 
@@ -25,7 +25,7 @@ defmodule Graph.Edge do
   The defaults of a weight of 1 and no label will be used if the options do
   not specify otherwise.
 
-  If you provide a non-integer weight, an error will be thrown.
+  An error will be thrown if weight is not an integer or float.
 
   ## Example
 

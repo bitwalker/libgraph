@@ -37,7 +37,7 @@ defmodule Graph do
   @type vertex_id :: non_neg_integer
   @type vertex :: term
   @type label :: term
-  @type edge_weight :: integer
+  @type edge_weight :: integer | float
   @type edge_key :: {vertex_id, vertex_id}
   @type edge_value :: %{label => edge_weight}
   @type graph_type :: :directed | :undirected
