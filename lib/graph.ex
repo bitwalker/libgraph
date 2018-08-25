@@ -1336,10 +1336,10 @@ defmodule Graph do
 
   ## Example
 
-     iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
-     ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :a}, {:b, :d}])
-     ...> Graph.reaching_neighbors(g, [:b])
-     [:b, :c, :a]
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :a}, {:b, :d}])
+      ...> Graph.reaching_neighbors(g, [:b])
+      [:b, :c, :a]
   """
   @spec reaching_neighbors(t, [vertex]) :: [[vertex]]
   defdelegate reaching_neighbors(g, vs), to: Graph.Directed
