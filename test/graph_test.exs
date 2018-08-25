@@ -57,7 +57,6 @@ defmodule GraphTest do
 
   test "get info about graph" do
     g = build_basic_cyclic_graph()
-
     assert %{type: :directed, num_vertices: 5, num_edges: 7} = Graph.info(g)
   end
 
@@ -165,6 +164,14 @@ defmodule GraphTest do
 
   test "shortest path for complex graph" do
     g = build_complex_graph()
+
+    shortest_g = Graph.dijkstra(g, "start", "end")
+    assert shortest_g ==
+      ["start", "start_0", 96, 97, 98, 33, 100, 34, 35, 36, 37, 19, 65, 66, 67, "end_0", "end"]
+  end
+
+  test "shortest path for complex graph using float weights" do
+    g = build_complex_graph_float()
 
     shortest_g = Graph.dijkstra(g, "start", "end")
     assert shortest_g ==
@@ -536,7 +543,15 @@ defmodule GraphTest do
     |> Graph.add_edge(31, 18, weight: 861)
     |> Graph.add_edge(31, 27, weight: 1178)
     |> Graph.add_edge(97, 98, weight: 13465)
+  end
 
+  defp build_complex_graph_float do
+    build_complex_graph()
+    |> Graph.edges
+    |> Enum.reduce(Graph.new(), fn %Graph.Edge{weight: weight} = edge, acc ->
+      acc
+      |> Graph.add_edge(%Graph.Edge{ edge | weight: weight / 1000 })
+    end)
   end
 
 end
