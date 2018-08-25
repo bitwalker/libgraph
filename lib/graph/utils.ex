@@ -1,7 +1,6 @@
 defmodule Graph.Utils do
   @moduledoc false
-  @compile {:inline, [vertex_id: 1,
-                      edge_weight: 3]}
+  @compile {:inline, [vertex_id: 1, edge_weight: 3]}
 
   @binary_heap_limit 64
 
@@ -13,6 +12,7 @@ defmodule Graph.Utils do
   def sizeof(term) do
     sizeof(term, :erlang.system_info(:wordsize))
   end
+
   defp sizeof(term, wordsize) do
     sizeof_term_local(term, wordsize) + sizeof_term(term)
   end
@@ -20,14 +20,17 @@ defmodule Graph.Utils do
   defp sizeof_term(term) when is_list(term) do
     sizeof_list(term)
   end
+
   defp sizeof_term(term) when is_tuple(term) do
     sizeof_tuple(term)
   end
+
   defp sizeof_term(%{__struct__: _} = term) when is_map(term) do
     Enum.reduce(Map.from_struct(term), 0, fn {k, v}, size ->
       sizeof_term(k) + sizeof_term(v) + size
     end)
   end
+
   defp sizeof_term(term) do
     sizeof_term_global(term)
   end
@@ -42,11 +45,13 @@ defmodule Graph.Utils do
       bsize when bsize > @binary_heap_limit ->
         # refc binary
         bsize
+
       _ ->
         # heap binary
         0
     end
   end
+
   defp sizeof_term_global(_term) do
     0
   end
@@ -54,9 +59,11 @@ defmodule Graph.Utils do
   defp sizeof_list(l, size \\ 0)
 
   defp sizeof_list([], size), do: size
-  defp sizeof_list([term|rest], size) do
-    sizeof_list(rest, size+sizeof_term(term))
+
+  defp sizeof_list([term | rest], size) do
+    sizeof_list(rest, size + sizeof_term(term))
   end
+
   defp sizeof_list(term, size) do
     # improper list
     size + sizeof_term(term)
@@ -65,19 +72,22 @@ defmodule Graph.Utils do
   defp sizeof_tuple(term) do
     sizeof_tuple(term, 1, :erlang.tuple_size(term), 0)
   end
+
   defp sizeof_tuple(term, n, n, size) do
     sizeof_term(:erlang.element(n, term)) + size
   end
+
   defp sizeof_tuple(term, i, n, size) do
-    sizeof_tuple(term, i+1, n, size+sizeof_term(:erlang.element(i, term)))
+    sizeof_tuple(term, i + 1, n, size + sizeof_term(:erlang.element(i, term)))
   end
 
   def edge_weight(%Graph{edges: meta}, a, b) do
     Map.fetch!(meta, {a, b})
     |> Enum.map(fn {_label, weight} -> weight end)
-    |> Enum.min
+    |> Enum.min()
   end
 
-  @max_phash 4_294_967_296 # 2^32
+  # 2^32
+  @max_phash 4_294_967_296
   def vertex_id(v), do: :erlang.phash2(v, @max_phash)
 end

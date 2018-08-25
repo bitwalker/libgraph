@@ -20,8 +20,8 @@ defmodule Graph.Reducers.Dfs do
       [1, 3, 2, 4]
   """
   def map(g, fun) when is_function(fun, 1) do
-    reduce(g, [], fn v, results -> {:next, [fun.(v)|results]} end)
-    |> Enum.reverse
+    reduce(g, [], fn v, results -> {:next, [fun.(v) | results]} end)
+    |> Enum.reverse()
   end
 
   @doc """
@@ -50,34 +50,40 @@ defmodule Graph.Reducers.Dfs do
       [2, 3, 1]
   """
   def reduce(%Graph{vertices: vs} = g, acc, fun) when is_function(fun, 2) do
-    traverse(Map.keys(vs), g, MapSet.new, fun, acc)
+    traverse(Map.keys(vs), g, MapSet.new(), fun, acc)
   end
 
   ## Private
 
-  defp traverse([v_id|rest], %Graph{out_edges: oe, vertices: vs} = g, visited, fun, acc) do
+  defp traverse([v_id | rest], %Graph{out_edges: oe, vertices: vs} = g, visited, fun, acc) do
     if MapSet.member?(visited, v_id) do
       traverse(rest, g, visited, fun, acc)
     else
       v = Map.get(vs, v_id)
+
       case fun.(v, acc) do
         {:next, acc2} ->
           visited = MapSet.put(visited, v_id)
+
           out =
             oe
-            |> Map.get(v_id, MapSet.new)
-            |> MapSet.to_list
+            |> Map.get(v_id, MapSet.new())
+            |> MapSet.to_list()
             |> Enum.sort_by(fn id -> Graph.Utils.edge_weight(g, v_id, id) end)
+
           traverse(out ++ rest, g, visited, fun, acc2)
+
         {:skip, acc2} ->
           # Skip this vertex and it's out-neighbors
           visited = MapSet.put(visited, v_id)
           traverse(rest, g, visited, fun, acc2)
+
         {:halt, acc2} ->
           acc2
       end
     end
   end
+
   defp traverse([], _g, _visited, _fun, acc) do
     acc
   end

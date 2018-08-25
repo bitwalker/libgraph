@@ -30,18 +30,23 @@ defmodule Graph.Pathfinding do
   the edge between it and the current vertex.
   """
   def a_star(%Graph{vertices: vs, out_edges: oe} = g, a, b, hfun) when is_function(hfun, 1) do
-    with a_id  <- vertex_id(a),
-         b_id  <- vertex_id(b),
+    with a_id <- vertex_id(a),
+         b_id <- vertex_id(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
-      tree = Graph.new |> Graph.add_vertex(a_id)
-      q = PriorityQueue.new
+      tree = Graph.new() |> Graph.add_vertex(a_id)
+      q = PriorityQueue.new()
+
       q =
         a_out
         |> Stream.map(fn id -> {id, cost(g, a_id, id, hfun)} end)
-        |> Enum.reduce(q, fn {id, cost}, q -> PriorityQueue.push(q, {a_id, id, edge_weight(g, a_id, id)}, cost) end)
+        |> Enum.reduce(q, fn {id, cost}, q ->
+          PriorityQueue.push(q, {a_id, id, edge_weight(g, a_id, id)}, cost)
+        end)
+
       case do_bfs(q, g, b_id, tree, hfun) do
         nil ->
           nil
+
         path ->
           for id <- path, do: Map.get(vs, id)
       end
@@ -55,12 +60,13 @@ defmodule Graph.Pathfinding do
   Returns `nil` if no path can be found.
   """
   def all(%Graph{vertices: vs, out_edges: oe} = g, a, b) do
-    with a_id  <- vertex_id(a),
-         b_id  <- vertex_id(b),
+    with a_id <- vertex_id(a),
+         b_id <- vertex_id(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
       case dfs(g, a_out, b_id, [a_id], []) do
         nil ->
           []
+
         paths ->
           paths
           |> Enum.map(fn path -> Enum.map(path, &Map.get(vs, &1)) end)
@@ -81,27 +87,38 @@ defmodule Graph.Pathfinding do
       {{:value, {v_id, ^target_id, _}}, _q1} ->
         v_id_tree = Graph.Utils.vertex_id(v_id)
         construct_path(v_id_tree, tree, [target_id])
+
       {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
         v2_id_tree = Graph.Utils.vertex_id(v2_id)
+
         if Map.has_key?(vs_tree, v2_id_tree) do
           do_bfs(q1, g, target_id, tree, hfun)
         else
           case Map.get(oe, v2_id) do
             nil ->
               do_bfs(q1, g, target_id, tree, hfun)
+
             v2_out ->
               tree =
                 tree
                 |> Graph.add_vertex(v2_id)
                 |> Graph.add_edge(v2_id, v1_id)
+
               q2 =
                 v2_out
                 |> Enum.map(fn id -> {id, v2_acc_weight + cost(g, v2_id, id, hfun)} end)
-                |> Enum.reduce(q1, fn {id, cost}, q -> PriorityQueue.push(q, {v2_id, id,
-                  v2_acc_weight + edge_weight(g, v2_id, id)}, cost) end)
+                |> Enum.reduce(q1, fn {id, cost}, q ->
+                  PriorityQueue.push(
+                    q,
+                    {v2_id, id, v2_acc_weight + edge_weight(g, v2_id, id)},
+                    cost
+                  )
+                end)
+
               do_bfs(q2, g, target_id, tree, hfun)
           end
         end
+
       {:empty, _} ->
         nil
     end
@@ -110,9 +127,11 @@ defmodule Graph.Pathfinding do
   defp construct_path(v_id_tree, %Graph{vertices: vs_tree, out_edges: oe_tree} = tree, path) do
     v_id_actual = Map.get(vs_tree, v_id_tree)
     path = [v_id_actual | path]
-    case oe_tree |> Map.get(v_id_tree, MapSet.new) |> MapSet.to_list do
+
+    case oe_tree |> Map.get(v_id_tree, MapSet.new()) |> MapSet.to_list() do
       [] ->
         path
+
       [next_id_tree] ->
         construct_path(next_id_tree, tree, path)
     end
@@ -121,10 +140,11 @@ defmodule Graph.Pathfinding do
   defp dfs(%Graph{} = g, neighbors, target_id, path, paths) do
     {paths, visited} =
       if MapSet.member?(neighbors, target_id) do
-        {[Enum.reverse([target_id|path])|paths], [target_id|path]}
+        {[Enum.reverse([target_id | path]) | paths], [target_id | path]}
       else
         {paths, path}
       end
+
     neighbors = MapSet.difference(neighbors, MapSet.new(visited))
     do_dfs(g, MapSet.to_list(neighbors), target_id, path, paths)
   end
@@ -132,7 +152,8 @@ defmodule Graph.Pathfinding do
   defp do_dfs(_g, [], _target_id, _path, paths) do
     paths
   end
-  defp do_dfs(%Graph{out_edges: oe} = g, [next_neighbor_id|neighbors], target_id, path, acc) do
+
+  defp do_dfs(%Graph{out_edges: oe} = g, [next_neighbor_id | neighbors], target_id, path, acc) do
     case Map.get(oe, next_neighbor_id) do
       nil ->
         do_dfs(g, neighbors, target_id, path, acc)
@@ -141,6 +162,7 @@ defmodule Graph.Pathfinding do
         case dfs(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
           nil ->
             do_dfs(g, neighbors, target_id, path, acc)
+
           paths ->
             do_dfs(g, neighbors, target_id, path, paths)
         end

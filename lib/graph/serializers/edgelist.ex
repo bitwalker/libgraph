@@ -18,13 +18,14 @@ defmodule Graph.Serializers.Edgelist do
   defp serialize_edges(%Graph{vertices: vertices, out_edges: oe} = g) do
     Enum.reduce(vertices, [], fn {id, v}, acc ->
       v_label = Serializer.get_vertex_label(g, id, v)
+
       edges =
         oe
-        |> Map.get(id, MapSet.new)
+        |> Map.get(id, MapSet.new())
         |> Enum.map(fn id2 ->
-        v2_label = Serializer.get_vertex_label(g, id2, Map.get(vertices, id2))
-        {v_label, v2_label}
-      end)
+          v2_label = Serializer.get_vertex_label(g, id2, Map.get(vertices, id2))
+          {v_label, v2_label}
+        end)
 
       case edges do
         [] -> acc

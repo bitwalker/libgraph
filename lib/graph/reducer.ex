@@ -15,9 +15,10 @@ defmodule Graph.Reducer do
   `Graph.Reducers.Dfs` (for depth-first traversals). Simply choose the best one for your use case.
   """
 
-  @callback map(g :: Graph.t, mapper :: (Graph.vertex -> term)) :: term
-  @callback reduce(g :: Graph.t, acc :: term, reducer :: (Graph.vertex, term -> term)) :: {:next, term}
-                                                                                        | {:halt, term}
+  @callback map(g :: Graph.t(), mapper :: (Graph.vertex() -> term)) :: term
+  @callback reduce(g :: Graph.t(), acc :: term, reducer :: (Graph.vertex(), term -> term)) ::
+              {:next, term}
+              | {:halt, term}
 
   defmacro __using__(_) do
     quote do

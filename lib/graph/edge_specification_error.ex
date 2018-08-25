@@ -6,7 +6,7 @@ defmodule Graph.EdgeSpecificationError do
   defexception [:message]
 
   def exception(value) do
-    msg = "Expected a valid edge specification, but got: #{inspect value}"
+    msg = "Expected a valid edge specification, but got: #{inspect(value)}"
     %__MODULE__{message: msg}
   end
 end

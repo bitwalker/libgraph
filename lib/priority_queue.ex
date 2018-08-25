@@ -42,26 +42,29 @@ defmodule PriorityQueue do
       {:value, :bar}
   """
   @spec push(t, term, integer | float) :: t
-  def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority) 
-    when is_number(priority) and size > 0 do
-      case :gb_trees.lookup(priority, tree) do
-        :none ->
-          q = :queue.in(term, :queue.new())
-          %__MODULE__{pq | priorities: :gb_trees.insert(priority, q, tree)}
-        {:value, q} ->
-          q = :queue.in(term, q)
-          %__MODULE__{pq | priorities: :gb_trees.update(priority, q, tree)}
-      end
+  def push(%__MODULE__{priorities: {size, _} = tree} = pq, term, priority)
+      when is_number(priority) and size > 0 do
+    case :gb_trees.lookup(priority, tree) do
+      :none ->
+        q = :queue.in(term, :queue.new())
+        %__MODULE__{pq | priorities: :gb_trees.insert(priority, q, tree)}
+
+      {:value, q} ->
+        q = :queue.in(term, q)
+        %__MODULE__{pq | priorities: :gb_trees.update(priority, q, tree)}
+    end
   end
-  def push(%__MODULE__{priorities: {0, _} = tree} = pq, term, priority) 
-    when is_number(priority) do
-      q = :queue.in(term, :queue.new())
-      %__MODULE__{pq | priorities: :gb_trees.insert(priority, q, tree)}
+
+  def push(%__MODULE__{priorities: {0, _} = tree} = pq, term, priority)
+      when is_number(priority) do
+    q = :queue.in(term, :queue.new())
+    %__MODULE__{pq | priorities: :gb_trees.insert(priority, q, tree)}
   end
-  def push(%__MODULE__{priorities: nil} = pq, term, priority) 
-    when is_number(priority) do
-      q = :queue.in(term, :queue.new())
-      %__MODULE__{pq | priorities: :gb_trees.insert(priority, q, :gb_trees.empty())}
+
+  def push(%__MODULE__{priorities: nil} = pq, term, priority)
+      when is_number(priority) do
+    q = :queue.in(term, :queue.new())
+    %__MODULE__{pq | priorities: :gb_trees.insert(priority, q, :gb_trees.empty())}
   end
 
   @doc """
@@ -83,6 +86,7 @@ defmodule PriorityQueue do
       {{:value, _} = val, _} -> val
     end
   end
+
   def peek(%__MODULE__{priorities: _}) do
     :empty
   end
@@ -112,13 +116,16 @@ defmodule PriorityQueue do
   @spec pop(t) :: {:empty, t} | {{:value, term}, t}
   def pop(%__MODULE__{priorities: {size, _} = tree} = pq) when size > 0 do
     {min_pri, q, tree2} = :gb_trees.take_smallest(tree)
+
     case :queue.out(q) do
       {:empty, _} ->
         pop(%__MODULE__{pq | priorities: tree2})
+
       {{:value, _} = val, q2} ->
         {val, %__MODULE__{pq | priorities: :gb_trees.update(min_pri, q2, tree)}}
     end
   end
+
   def pop(%__MODULE__{priorities: _} = pq) do
     {:empty, pq}
   end
@@ -127,14 +134,14 @@ defmodule PriorityQueue do
     def inspect(%PriorityQueue{priorities: {size, _} = tree}, opts) when size > 0 do
       items =
         tree
-        |> :gb_trees.to_list
+        |> :gb_trees.to_list()
         |> Enum.flat_map(fn {_priority, q} -> :queue.to_list(q) end)
-      count =
-        Enum.count(items)
-      doc =
-        Inspect.Algebra.to_doc(items, opts)
+
+      count = Enum.count(items)
+      doc = Inspect.Algebra.to_doc(items, opts)
       Inspect.Algebra.concat(["#PriorityQueue<size: #{count}, queue: ", doc, ">"])
     end
+
     def inspect(%PriorityQueue{}, _opts) do
       "#PriorityQueue<size: 0, queue: []>"
     end

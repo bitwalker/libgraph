@@ -11,13 +11,14 @@ defmodule Graph.Edge do
             label: nil
 
   @type t :: %__MODULE__{
-    v1: Graph.vertex,
-    v2: Graph.vertex,
-    weight: integer | float,
-    label: term
-  }
-  @type edge_opt :: {:weight, integer | float}
-                  | {:label, term}
+          v1: Graph.vertex(),
+          v2: Graph.vertex(),
+          weight: integer | float,
+          label: term
+        }
+  @type edge_opt ::
+          {:weight, integer | float}
+          | {:label, term}
   @type edge_opts :: [edge_opt]
 
   @doc """
@@ -32,8 +33,8 @@ defmodule Graph.Edge do
       iex> Graph.new |> Graph.add_edge(Graph.Edge.new(:a, :b, weight: "1"))
       ** (ArgumentError) invalid value for :weight, must be an integer
   """
-  @spec new(Graph.vertex, Graph.vertex) :: t
-  @spec new(Graph.vertex, Graph.vertex, [edge_opt]) :: t | no_return
+  @spec new(Graph.vertex(), Graph.vertex()) :: t
+  @spec new(Graph.vertex(), Graph.vertex(), [edge_opt]) :: t | no_return
   def new(v1, v2, opts \\ []) when is_list(opts) do
     %__MODULE__{
       v1: v1,
@@ -47,13 +48,16 @@ defmodule Graph.Edge do
   def options_to_meta(opts) when is_list(opts) do
     label = Keyword.get(opts, :label)
     weight = Keyword.get(opts, :weight, 1)
+
     case {label, weight} do
       {_, w} = meta when is_number(w) ->
         meta
+
       {_, _} ->
         raise ArgumentError, message: "invalid value for :weight, must be an integer"
     end
   end
+
   def options_to_meta(nil), do: nil
 
   @doc false
