@@ -48,7 +48,7 @@ defmodule Graph.Edge do
     label = Keyword.get(opts, :label)
     weight = Keyword.get(opts, :weight, 1)
     case {label, weight} do
-      {_, w} = meta when is_integer(w) or is_float(w) ->
+      {_, w} = meta when is_number(w) ->
         meta
       {_, _} ->
         raise ArgumentError, message: "invalid value for :weight, must be an integer"
