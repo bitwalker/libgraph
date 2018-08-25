@@ -14,6 +14,26 @@ defmodule GraphTest do
     assert [:labelB] = Graph.vertex_labels(g, :v1)
   end
 
+  test "delete vertices" do
+    graph =
+      Graph.new
+      |> Graph.add_vertices([1, 2, 4, 6])
+      |> Graph.add_edge(1, 2)
+      |> Graph.add_edge(2, 4)
+      |> Graph.add_edge(4, 6)
+
+    graph_two =
+      graph
+      |> Graph.add_vertices([3, 5, 7])
+      |> Graph.add_edge(1, 3)
+      |> Graph.add_edge(3, 4)
+      |> Graph.add_edge(3, 5)
+      |> Graph.add_edge(5, 6)
+      |> Graph.add_edge(5, 7)
+
+    assert graph == Graph.delete_vertices(graph_two, [3, 5, 7])
+  end
+
   test "inspect" do
     g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])
     ug = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])

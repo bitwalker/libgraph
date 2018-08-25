@@ -729,6 +729,7 @@ defmodule Graph do
          vs <- Map.delete(vs, v_id),
          ls <- Map.delete(ls, v_id) do
       oe = for {id, ns} <- oe, do: {id, MapSet.delete(ns, v_id)}, into: %{}
+      ie = for {id, ns} <- ie, do: {id, MapSet.delete(ns, v_id)}, into: %{}
       em = for {{id1, id2}, _} = e <- em, v_id != id1 && v_id != id2, do: e, into: %{}
       %__MODULE__{g |
                   vertices: vs,
