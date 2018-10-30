@@ -80,10 +80,14 @@ defmodule PriorityQueue do
       :foo
   """
   @spec peek(t) :: :empty | {:value, term}
-  def peek(%__MODULE__{priorities: {size, {_min_pri, q, _, _}}}) when size > 0 do
+  def peek(%__MODULE__{priorities: {size, _} = tree}) when size > 0 do
+    {_, q, _} = :gb_trees.take_smallest(tree)
     case :queue.out(q) do
-      {:empty, _} -> :empty
-      {{:value, _} = val, _} -> val
+      {:empty, _} -> 
+        :empty
+
+      {{:value, _} = val, _} -> 
+        val
     end
   end
 
