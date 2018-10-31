@@ -51,6 +51,7 @@ defmodule Graph.Mixfile do
     [{:benchee, "~> 0.8", only: [:bench]},
      {:eqc_ex, "~> 1.4", only: [:test]},
      {:excoveralls, "~> 0.7", only: [:test]},
+     {:dialyxir, "~> 1.0.0-rc.3", only: [:dev], runtime: false},
      {:ex_doc, ">= 0.0.0", only: :dev}]
   end
 

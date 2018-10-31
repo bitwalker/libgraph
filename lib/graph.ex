@@ -1974,7 +1974,8 @@ defmodule Graph do
         end)
       end)
     else
-      _ -> []
+      _ -> 
+        [] 
     end
   end
 

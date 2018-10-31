@@ -4,6 +4,8 @@ defmodule Graph.Pathfinding do
   """
   import Graph.Utils, only: [vertex_id: 1, edge_weight: 3]
 
+  @type heuristic_fun :: ((Graph.vertex) -> integer)
+
   @doc """
   Finds the shortest path between `a` and `b` as a list of vertices.
   Returns `nil` if no path can be found.
@@ -12,6 +14,7 @@ defmodule Graph.Pathfinding do
   which path to explore next. The cost function in Dijkstra's algorithm is
   `weight(E(A, B))+lower_bound(E(A, B))` where `lower_bound(E(A, B))` is always 0.
   """
+  @spec dijkstra(Graph.t, Graph.vertex, Graph.vertex) :: [Graph.vertex] | nil
   def dijkstra(%Graph{} = g, a, b) do
     a_star(g, a, b, fn _v -> 0 end)
   end
@@ -29,6 +32,7 @@ defmodule Graph.Pathfinding do
   always returns 0, and thus the next vertex is chosen based on the weight of
   the edge between it and the current vertex.
   """
+  @spec a_star(Graph.t, Graph.vertex, Graph.vertex, heuristic_fun) :: [Graph.vertex] | nil
   def a_star(%Graph{vertices: vs, out_edges: oe} = g, a, b, hfun) when is_function(hfun, 1) do
     with a_id <- vertex_id(a),
          b_id <- vertex_id(b),
@@ -47,11 +51,12 @@ defmodule Graph.Pathfinding do
         nil ->
           nil
 
-        path ->
+        path when is_list(path) ->
           for id <- path, do: Map.get(vs, id)
       end
     else
-      _ -> nil
+      _ -> 
+        nil
     end
   end
 
@@ -59,12 +64,13 @@ defmodule Graph.Pathfinding do
   Finds all paths between `a` and `b`, each path as a list of vertices.
   Returns `nil` if no path can be found.
   """
+  @spec all(Graph.t, Graph.vertex, Graph.vertex) :: [Graph.vertex]
   def all(%Graph{vertices: vs, out_edges: oe} = g, a, b) do
     with a_id <- vertex_id(a),
          b_id <- vertex_id(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
       case dfs(g, a_out, b_id, [a_id], []) do
-        nil ->
+        [] ->
           []
 
         paths ->
@@ -137,7 +143,7 @@ defmodule Graph.Pathfinding do
     end
   end
 
-  defp dfs(%Graph{} = g, neighbors, target_id, path, paths) do
+  defp dfs(%Graph{} = g, neighbors, target_id, path, paths) when is_list(paths) do
     {paths, visited} =
       if MapSet.member?(neighbors, target_id) do
         {[Enum.reverse([target_id | path]) | paths], [target_id | path]}
@@ -149,7 +155,7 @@ defmodule Graph.Pathfinding do
     do_dfs(g, MapSet.to_list(neighbors), target_id, path, paths)
   end
 
-  defp do_dfs(_g, [], _target_id, _path, paths) do
+  defp do_dfs(_g, [], _target_id, _path, paths) when is_list(paths) do
     paths
   end
 
@@ -160,7 +166,7 @@ defmodule Graph.Pathfinding do
 
       next_neighbors ->
         case dfs(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
-          nil ->
+          [] ->
             do_dfs(g, neighbors, target_id, path, acc)
 
           paths ->
