@@ -18,6 +18,29 @@ defmodule Graph.SerializerTests do
     """} = Graph.to_dot(g)
   end
 
+
+  test "to_png/1" do
+    test_file = "test"
+    g = kitchen_sink_graph()
+
+    assert {:ok, ""} = Graph.to_png(g, test_file)
+    assert """
+    strict digraph {
+        "start"
+        "{:complex, :label}"
+        "c"
+        "finish"
+        "start" -> "{:complex, :label}" [weight=3]
+        "{:complex, :label}" -> "c" [label=5; weight=1]
+        "{:complex, :label}" -> "finish" [label=1.0; weight=3]
+        "c" -> "finish" [weight=1]
+    }
+    """ = File.read! "#{test_file}.dot"
+    assert File.exists? "#{test_file}.png"
+    File.rm "#{test_file}.dot"
+    File.rm "#{test_file}.png"
+  end
+
   test "to_edgelist" do
     g = kitchen_sink_graph()
 
