@@ -30,6 +30,10 @@ addition, over time I'm adding new functions to query the graph in ways not prev
 and introducing support for classifying a graph as undirected if so desired, so that queries over such graphs
 become easier.
 
+If you are interested in reading more about how you can make use of `libgraph`, 
+there is an [excellent blog post](https://medium.com/@tonyhammond/native-graph-data-in-elixir-8c0bb325d451) written by Tony Hammond
+which is a very helpful walkthrough of the library and what can be built with it.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
