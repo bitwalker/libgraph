@@ -48,7 +48,7 @@ defmodule Graph.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:benchee, "~> 0.8", only: [:bench]},
+    [{:benchee, "~> 1.0", only: [:bench]},
      {:eqc_ex, "~> 1.4", only: [:test]},
      {:excoveralls, "~> 0.7", only: [:test]},
      {:dialyxir, "~> 1.0.0-rc.3", only: [:dev], runtime: false},
