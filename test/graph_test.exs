@@ -102,6 +102,22 @@ defmodule GraphTest do
     assert ^root = Graph.arborescence_root(g)
   end
 
+  test "edges/2 returns both directions" do
+    generated_result = Graph.new()
+        |> Graph.add_edges([
+          {:a, :b, label: "label1"},
+          {:a, :b, label: "label2"},
+          {:b, :a, label: "label3"}
+        ])
+        |> Graph.edges(:a)
+    expected_result = [
+      %Graph.Edge{label: "label3", v1: :b, v2: :a, weight: 1},
+      %Graph.Edge{label: "label1", v1: :a, v2: :b, weight: 1},
+      %Graph.Edge{label: "label2", v1: :a, v2: :b, weight: 1},
+    ]
+    assert generated_result == expected_result
+  end
+
   test "is_subgraph?" do
     g = build_basic_tree_graph()
     sg = Graph.subgraph(g, [:a, :b, :c])

@@ -409,21 +409,21 @@ defmodule Graph do
     v_out = Map.get(oe, v_id) || MapSet.new()
     v_all = MapSet.union(v_in, v_out)
 
-    Enum.flat_map(v_all, fn v2_id ->
-      case Map.get(meta, {v_id, v2_id}) do
-        nil ->
-          case Map.get(meta, {v2_id, v_id}) do
-            nil ->
-              []
+    e_in = Enum.flat_map(v_all, fn v2_id ->
+      case Map.get(meta, {v2_id, v_id}) do
+        nil -> []
+        edge_meta when is_map(edge_meta) ->
+          v2 = Map.get(vs, v2_id)
 
-            edge_meta when is_map(edge_meta) ->
-              v2 = Map.get(vs, v2_id)
-
-              for {label, weight} <- edge_meta do
-                Edge.new(v2, v, label: label, weight: weight)
-              end
+          for {label, weight} <- edge_meta do
+            Edge.new(v2, v, label: label, weight: weight)
           end
+      end
+    end)
 
+    e_out = Enum.flat_map(v_all, fn v2_id ->
+      case Map.get(meta, {v_id, v2_id}) do
+        nil -> []
         edge_meta when is_map(edge_meta) ->
           v2 = Map.get(vs, v2_id)
 
@@ -432,6 +432,8 @@ defmodule Graph do
           end
       end
     end)
+
+    e_in ++ e_out
   end
 
   @doc """
