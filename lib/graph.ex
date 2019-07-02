@@ -684,6 +684,31 @@ defmodule Graph do
   end
 
   @doc """
+    iex> graph = Graph.new |> Graph.add_vertex(:a, [:foo, :bar])
+    ...> [:foo, :bar] = Graph.vertex_labels(graph, :a)
+    ...> graph = Graph.remove_vertex_labels(graph, :a)
+    ...> Graph.vertex_labels(graph, :a)
+    []
+
+    iex> graph = Graph.new |> Graph.add_vertex(:a, [:foo, :bar])
+    ...> [:foo, :bar] = Graph.vertex_labels(graph, :a)
+    ...> Graph.remove_vertex_labels(graph, :b)
+    {:error, {:invalid_vertex, :b}}
+  """
+  @spec remove_vertex_labels(t, vertex) :: t | {:error, {:invalid_vertex, vertex}}
+  def remove_vertex_labels(%__MODULE__{vertices: vertices, vertex_labels: vertex_labels} = graph, vertex) do
+    graph.vertex_labels
+    |> Map.put(vertex, [])
+    with vertex_id <- Graph.Utils.vertex_id(vertex),
+         true <- Map.has_key?(vertices, vertex_id),
+         labels <- Map.put(vertex_labels, vertex_id, []) do
+      %__MODULE__{graph | vertex_labels: labels}
+    else
+      _ -> {:error, {:invalid_vertex, vertex}}
+    end
+  end
+
+  @doc """
   Replaces `vertex` with `new_vertex` in the graph.
 
   ## Example
