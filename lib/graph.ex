@@ -454,23 +454,33 @@ defmodule Graph do
     with v1_id <- Graph.Utils.vertex_id(v1),
          v2_id <- Graph.Utils.vertex_id(v2),
          edge_key <- {v1_id, v2_id},
-         {:ok, edge_meta} <- Map.fetch(meta, edge_key) do
+         edge_meta <- Map.get(meta, edge_key, %{}) do
       case type do
         :directed ->
-          for {label, weight} <- edge_meta do
-            Edge.new(v1, v2, label: label, weight: weight)
-          end
+          edge_list(v1, v2, edge_meta, type)
 
         :undirected ->
           edge_meta2 = Map.get(meta, {v2_id, v1_id}, %{})
           merged_meta = Map.merge(edge_meta, edge_meta2)
 
-          for {label, weight} <- merged_meta do
-            Edge.new(v1, v2, label: label, weight: weight)
-          end
+          edge_list(v1, v2, merged_meta, type)
       end
-    else
-      _ -> []
+    end
+  end
+
+  defp edge_list(v1, v2, edge_meta, :undirected) do
+    for {label, weight} <- edge_meta do
+      if v1 > v2 do
+        Edge.new(v2, v1, label: label, weight: weight)
+      else
+        Edge.new(v1, v2, label: label, weight: weight)
+      end
+    end
+  end
+
+  defp edge_list(v1, v2, edge_meta, _) do
+    for {label, weight} <- edge_meta do
+      Edge.new(v1, v2, label: label, weight: weight)
     end
   end
 

@@ -178,6 +178,34 @@ defmodule GraphTest do
       ["start", "start_0", 96, 97, 98, 33, 100, 34, 35, 36, 37, 19, 65, 66, 67, "end_0", "end"]
   end
 
+  test "edge undirected graph v1 > v2" do
+    g = build_basic_undirected_graph()
+    e1 = Graph.edge(g, :a, :b)
+    e2 = Graph.edge(g, :b, :a)
+    assert e1 == e2
+  end
+
+  test "edge undirected graph v1 < v2" do
+    g = build_basic_undirected_graph()
+    e1 = Graph.edge(g, :b, :c)
+    e2 = Graph.edge(g, :c, :b)
+    assert e1 == e2
+  end
+
+  test "edges undirected graph v1 > v2" do
+    g = build_basic_undirected_graph()
+    e1 = Graph.edges(g, :a, :b)
+    e2 = Graph.edges(g, :b, :a)
+    assert e1 == e2
+  end
+
+  test "edges undirected graph v1 < v2" do
+    g = build_basic_undirected_graph()
+    e1 = Graph.edges(g, :b, :c)
+    e2 = Graph.edges(g, :c, :b)
+    assert e1 == e2
+  end
+
   test "out_edges" do
     g = build_basic_acyclic_graph()
     assert [%Edge{v1: :c, v2: :d}] = Graph.out_edges(g, :c)
@@ -403,6 +431,13 @@ defmodule GraphTest do
     :digraph.add_edge(dg, :c, :d)
     :digraph.add_edge(dg, :c, :e)
     dg
+  end
+
+  defp build_basic_undirected_graph do
+    Graph.new(type: :undirected)
+    |> Graph.add_vertices([:a, :b, :c])
+    |> Graph.add_edge(:a, :b)
+    |> Graph.add_edge(:c, :b)
   end
 
   defp build_complex_graph() do
