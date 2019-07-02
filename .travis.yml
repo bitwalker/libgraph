@@ -2,10 +2,26 @@ language: elixir
 sudo: false
 elixir:
   - 1.4
+  - 1.8
+  - 1.9
 otp_release:
   - 18.3
   - 19.1
   - 20.0
+  - 21.0
+  - 22.0
+matrix:
+  exclude:
+    - elixir: 1.8
+      otp_release: 18.3
+    - elixir: 1.9
+      otp_release: 18.3
+    - elixir: 1.8
+      otp_release: 19.1
+    - elixir: 1.9
+      otp_release: 19.1
+    - elixir: 1.9
+      otp_release: 20.0
 env:
   - MIX_ENV=test
 script:
@@ -13,4 +29,4 @@ script:
   - mix coveralls.travis
 notifications:
   recipients:
-    - paulschoenfelder@gmail.com
+    - paulschoenfelder@fastmail.com
