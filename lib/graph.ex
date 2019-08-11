@@ -41,12 +41,13 @@ defmodule Graph do
   @type edge_key :: {vertex_id, vertex_id}
   @type edge_value :: %{label => edge_weight}
   @type graph_type :: :directed | :undirected
+  @type vertices :: %{vertex_id => vertex}
   @type t :: %__MODULE__{
           in_edges: %{vertex_id => MapSet.t()},
           out_edges: %{vertex_id => MapSet.t()},
           edges: %{edge_key => edge_value},
           vertex_labels: %{vertex_id => term},
-          vertices: %{vertex_id => vertex},
+          vertices: vertices,
           type: graph_type
         }
 
@@ -306,6 +307,24 @@ defmodule Graph do
   """
   @spec dijkstra(t, vertex, vertex) :: [vertex]
   defdelegate dijkstra(g, a, b), to: Graph.Pathfinding
+
+  @doc """
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_edges([
+      ...>   {:b, :c, weight: -2}, {:a, :b, weight: 1},
+      ...>   {:c, :d, weight: 3}, {:b, :d, weight: 4}])
+      ...> Graph.bellman_ford(g, :a)
+      %{97 => 0, 98 => 1, 99 => -1, 100 => 2}
+
+      iex> g = Graph.new |> Graph.add_edges([
+      ...>   {:b, :c, weight: -2}, {:a, :b, weight: -1},
+      ...>   {:c, :d, weight: -3}, {:d, :a, weight: -5}])
+      ...> Graph.bellman_ford(g, :a)
+      nil
+  """
+  @spec bellman_ford(t, vertex) :: [vertex]
+  defdelegate bellman_ford(g, a), to: Graph.Pathfinding
 
   @doc """
   Gets the shortest path between `a` and `b`.

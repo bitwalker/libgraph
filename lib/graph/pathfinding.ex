@@ -6,6 +6,9 @@ defmodule Graph.Pathfinding do
 
   @type heuristic_fun :: ((Graph.vertex) -> integer)
 
+  @spec bellman_ford(Graph.t, Graph.vertex) :: [Graph.vertex]
+  def bellman_ford(g, a), do: Pathfindings.BellmanFord.call(g, a)
+
   @doc """
   Finds the shortest path between `a` and `b` as a list of vertices.
   Returns `nil` if no path can be found.
@@ -55,7 +58,7 @@ defmodule Graph.Pathfinding do
           for id <- path, do: Map.get(vs, id)
       end
     else
-      _ -> 
+      _ ->
         nil
     end
   end
