@@ -15,7 +15,7 @@ This library provides:
 - A priority queue implementation `PriorityQueue`, oriented towards graphs (it prioritizes lower integer values over high),
   it is the fastest priority queue I know of which allows arbitrary priorities, and is more or less at parity with
   `pqueue3` from [the pqueue library](https://github.com/okeuday/pqueue/), which supports priorities from 0 to 65535.
-- An idiomatic Elixir API for creating, modifying, and querying it's graph structure. Creating and modifying a graph
+- An idiomatic Elixir API for creating, modifying, and querying its graph structure. Creating and modifying a graph
   can be done in a single pipeline, and all queries take a Graph as their first parameter (one of my complaints with `:digraph`
   is that there is some inconsistency with the API between `:digraph` and `:digraph_utils` for no apparent reason).
 - Two "Reducer" implementations for mapping/reducing over a graph. I am trying to figure out the best way to make these
@@ -24,7 +24,7 @@ approach that feels good on that front.
 - A `Serializer` behaviour, for defining custom serialization of graphs, with a Graphviz DOT format serializer
   provided out of the box.
 
-It is backed by a large suite of tests, including several QuickCheck properties for the graph model. It's
+It is backed by a large suite of tests, including several QuickCheck properties for the graph model. Its
 API shares some similarity with `:digraph`, but diverges in favor of a more idiomatic Elixir interface. In
 addition, over time I'm adding new functions to query the graph in ways not previously supported via `:digraph`,
 and introducing support for classifying a graph as undirected if so desired, so that queries over such graphs
