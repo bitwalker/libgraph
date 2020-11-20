@@ -33,7 +33,8 @@ defmodule Graph.Pathfinding do
   the edge between it and the current vertex.
   """
   @spec a_star(Graph.t, Graph.vertex, Graph.vertex, heuristic_fun) :: [Graph.vertex] | nil
-  def a_star(%Graph{vertices: vs, out_edges: oe} = g, a, b, hfun) when is_function(hfun, 1) do
+  def a_star(%Graph{type: :directed, vertices: vs, out_edges: oe} = g, a, b, hfun)
+      when is_function(hfun, 1) do
     with a_id <- vertex_id(a),
          b_id <- vertex_id(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
@@ -55,8 +56,32 @@ defmodule Graph.Pathfinding do
           for id <- path, do: Map.get(vs, id)
       end
     else
-      _ -> 
+      _ ->
         nil
+    end
+  end
+
+  def a_star(%Graph{type: :undirected, vertices: vs} = g, a, b, hfun)
+      when is_function(hfun, 1) do
+    a_id = vertex_id(a)
+    b_id = vertex_id(b)
+    a_all_edges = all_edges(g, a_id)
+    tree = Graph.new() |> Graph.add_vertex(a_id)
+    q = PriorityQueue.new()
+
+    q =
+      a_all_edges
+      |> Stream.map(fn id -> {id, cost(g, a_id, id, hfun)} end)
+      |> Enum.reduce(q, fn {id, cost}, q ->
+        PriorityQueue.push(q, {a_id, id, edge_weight(g, a_id, id)}, cost)
+      end)
+
+    case do_bfs(q, g, b_id, tree, hfun) do
+      nil ->
+        nil
+
+      path when is_list(path) ->
+        for id <- path, do: Map.get(vs, id)
     end
   end
 
@@ -84,11 +109,23 @@ defmodule Graph.Pathfinding do
 
   ## Private
 
+  defp all_edges(%Graph{type: :undirected, out_edges: oe, in_edges: ie}, v_id) do
+    v_in = Map.get(ie, v_id, MapSet.new())
+    v_out = Map.get(oe, v_id, MapSet.new())
+    MapSet.union(v_in, v_out)
+  end
+
   defp cost(%Graph{vertices: vs} = g, v1_id, v2_id, hfun) do
     edge_weight(g, v1_id, v2_id) + hfun.(Map.get(vs, v2_id))
   end
 
-  defp do_bfs(q, %Graph{out_edges: oe} = g, target_id, %Graph{vertices: vs_tree} = tree, hfun) do
+  defp do_bfs(
+         q,
+         %Graph{type: :directed, out_edges: oe} = g,
+         target_id,
+         %Graph{vertices: vs_tree} = tree,
+         hfun
+       ) do
     case PriorityQueue.pop(q) do
       {{:value, {v_id, ^target_id, _}}, _q1} ->
         v_id_tree = Graph.Utils.vertex_id(v_id)
@@ -122,6 +159,54 @@ defmodule Graph.Pathfinding do
                 end)
 
               do_bfs(q2, g, target_id, tree, hfun)
+          end
+        end
+
+      {:empty, _} ->
+        nil
+    end
+  end
+
+  defp do_bfs(
+         q,
+         %Graph{type: :undirected} = g,
+         target_id,
+         %Graph{vertices: vs_tree} = tree,
+         hfun
+       ) do
+    case PriorityQueue.pop(q) do
+      {{:value, {v_id, ^target_id, _}}, _q1} ->
+        v_id_tree = vertex_id(v_id)
+        construct_path(v_id_tree, tree, [target_id])
+
+      {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
+        v2_id_tree = vertex_id(v2_id)
+
+        if Map.has_key?(vs_tree, v2_id_tree) do
+          do_bfs(q1, g, target_id, tree, hfun)
+        else
+          all_edges = all_edges(g, v2_id)
+
+          if MapSet.equal?(all_edges, MapSet.new()) do
+            do_bfs(q1, g, target_id, tree, hfun)
+          else
+            tree =
+              tree
+              |> Graph.add_vertex(v2_id)
+              |> Graph.add_edge(v2_id, v1_id)
+
+            q2 =
+              all_edges
+              |> Enum.map(fn id -> {id, v2_acc_weight + cost(g, v2_id, id, hfun)} end)
+              |> Enum.reduce(q1, fn {id, cost}, q ->
+                PriorityQueue.push(
+                  q,
+                  {v2_id, id, v2_acc_weight + edge_weight(g, v2_id, id)},
+                  cost
+                )
+              end)
+
+            do_bfs(q2, g, target_id, tree, hfun)
           end
         end
 

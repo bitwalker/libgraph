@@ -186,12 +186,30 @@ defmodule GraphTest do
       ["start", "start_0", 96, 97, 98, 33, 100, 34, 35, 36, 37, 19, 65, 66, 67, "end_0", "end"]
   end
 
+  test "shortest path for complex undirected graph" do
+    g = build_complex_graph(:undirected)
+
+    shortest_g = Graph.dijkstra(g, "start", "end")
+
+    assert shortest_g ==
+      ["start", "start_0", 95, 94, 93, 39, 38, 21, 69, 68, "end_0", "end"]
+  end
+
   test "shortest path for complex graph using float weights" do
     g = build_complex_graph_float()
 
     shortest_g = Graph.dijkstra(g, "start", "end")
     assert shortest_g ==
       ["start", "start_0", 96, 97, 98, 33, 100, 34, 35, 36, 37, 19, 65, 66, 67, "end_0", "end"]
+  end
+
+  test "shortest path for complex undirected graph using float weights" do
+    g = build_complex_graph_float(:undirected)
+
+    shortest_g = Graph.dijkstra(g, "start", "end")
+
+    assert shortest_g ==
+      ["start", "start_0", 95, 94, 93, 39, 38, 21, 69, 68, "end_0", "end"]
   end
 
   test "edge undirected graph v1 > v2" do
@@ -456,8 +474,8 @@ defmodule GraphTest do
     |> Graph.add_edge(:c, :b)
   end
 
-  defp build_complex_graph() do
-    Graph.new
+  defp build_complex_graph(type \\ :directed) do
+    Graph.new(type: type)
     |> Graph.add_edge(42, 25, weight: 2525)
     |> Graph.add_edge(66, 67, weight: 2254)
     |> Graph.add_edge(71, 72, weight: 3895)
@@ -596,10 +614,10 @@ defmodule GraphTest do
     |> Graph.add_edge(97, 98, weight: 13465)
   end
 
-  defp build_complex_graph_float do
-    build_complex_graph()
+  defp build_complex_graph_float(type \\ :directed) do
+    build_complex_graph(type)
     |> Graph.edges
-    |> Enum.reduce(Graph.new(), fn %Graph.Edge{weight: weight} = edge, acc ->
+    |> Enum.reduce(Graph.new(type: type), fn %Graph.Edge{weight: weight} = edge, acc ->
       acc
       |> Graph.add_edge(%Graph.Edge{ edge | weight: weight / 1000 })
     end)
