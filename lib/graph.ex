@@ -54,6 +54,12 @@ defmodule Graph do
           type: graph_type,
           vertex_identifier: (vertex() -> term())
         }
+  @type graph_info :: %{
+    :num_edges => non_neg_integer(),
+    :num_vertices => non_neg_integer(),
+    :size_in_bytes => number(),
+    :type => :directed | :undirected
+  }
 
   @doc """
   Creates a new graph using the provided options.
@@ -100,7 +106,7 @@ defmodule Graph do
       ...> match?(%{type: :directed, num_vertices: 4, num_edges: 2}, Graph.info(g))
       true
   """
-  @spec info(t) :: %{num_edges: non_neg_integer, num_vertices: non_neg_integer}
+  @spec info(t) :: graph_info()
   def info(%__MODULE__{type: type} = g) do
     %{
       type: type,
