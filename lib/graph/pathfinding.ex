@@ -4,7 +4,7 @@ defmodule Graph.Pathfinding do
   """
   import Graph.Utils, only: [vertex_id: 1, edge_weight: 3]
 
-  @type heuristic_fun :: ((Graph.vertex) -> integer)
+  @type heuristic_fun :: (Graph.vertex() -> integer)
 
   @doc """
   Finds the shortest path between `a` and `b` as a list of vertices.
@@ -14,7 +14,7 @@ defmodule Graph.Pathfinding do
   which path to explore next. The cost function in Dijkstra's algorithm is
   `weight(E(A, B))+lower_bound(E(A, B))` where `lower_bound(E(A, B))` is always 0.
   """
-  @spec dijkstra(Graph.t, Graph.vertex, Graph.vertex) :: [Graph.vertex] | nil
+  @spec dijkstra(Graph.t(), Graph.vertex(), Graph.vertex()) :: [Graph.vertex()] | nil
   def dijkstra(%Graph{} = g, a, b) do
     a_star(g, a, b, fn _v -> 0 end)
   end
@@ -32,7 +32,7 @@ defmodule Graph.Pathfinding do
   always returns 0, and thus the next vertex is chosen based on the weight of
   the edge between it and the current vertex.
   """
-  @spec a_star(Graph.t, Graph.vertex, Graph.vertex, heuristic_fun) :: [Graph.vertex] | nil
+  @spec a_star(Graph.t(), Graph.vertex(), Graph.vertex(), heuristic_fun) :: [Graph.vertex()] | nil
   def a_star(%Graph{type: :directed, vertices: vs, out_edges: oe} = g, a, b, hfun)
       when is_function(hfun, 1) do
     with a_id <- vertex_id(a),
@@ -89,7 +89,7 @@ defmodule Graph.Pathfinding do
   Finds all paths between `a` and `b`, each path as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  @spec all(Graph.t, Graph.vertex, Graph.vertex) :: [Graph.vertex]
+  @spec all(Graph.t(), Graph.vertex(), Graph.vertex()) :: [Graph.vertex()]
   def all(%Graph{vertices: vs, out_edges: oe} = g, a, b) do
     with a_id <- vertex_id(a),
          b_id <- vertex_id(b),

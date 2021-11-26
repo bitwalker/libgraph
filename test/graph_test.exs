@@ -5,6 +5,19 @@ defmodule GraphTest do
   alias Graph.Edge
   alias Graph.Test.Generators
 
+  test "injectable vertex_identifier" do
+    g = Graph.new()
+
+    g_with_custom_vertex_identifier =
+      Graph.new(vertex_identifier: fn v -> :erlang.phash2(v, trunc(:math.pow(2, 16))) end)
+
+    g = Graph.add_vertex(g, :v1, :labelA)
+    g_with_custom_vertex_identifier = Graph.add_vertex(g_with_custom_vertex_identifier, :v1, :labelA)
+
+    assert Graph.has_vertex?(g, :v1)
+    assert Graph.has_vertex?(g_with_custom_vertex_identifier, :v1)
+  end
+
   test "delete vertex" do
     g = Graph.new()
     g = Graph.add_vertex(g, :v1, :labelA)
