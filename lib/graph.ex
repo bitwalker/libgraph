@@ -55,11 +55,11 @@ defmodule Graph do
           vertex_identifier: (vertex() -> term())
         }
   @type graph_info :: %{
-    :num_edges => non_neg_integer(),
-    :num_vertices => non_neg_integer(),
-    :size_in_bytes => number(),
-    :type => :directed | :undirected
-  }
+          :num_edges => non_neg_integer(),
+          :num_vertices => non_neg_integer(),
+          :size_in_bytes => number(),
+          :type => :directed | :undirected
+        }
 
   @doc """
   Creates a new graph using the provided options.
