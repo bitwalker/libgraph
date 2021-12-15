@@ -286,7 +286,7 @@ defmodule Graph do
   end
 
   @doc """
-  See `dijkstra/1`.
+  See `dijkstra/3`.
   """
   @spec get_shortest_path(t, vertex, vertex) :: [vertex]
   defdelegate get_shortest_path(g, a, b), to: Graph.Pathfinding, as: :dijkstra
