@@ -2,8 +2,6 @@ defmodule Graph.Directed do
   @moduledoc false
   @compile {:inline, [in_neighbors: 2, in_neighbors: 3, out_neighbors: 2, out_neighbors: 3]}
 
-  import Graph.Utils, only: [vertex_id: 1]
-
   def topsort(%Graph{vertices: vs} = g) do
     l = reverse_postorder(g)
 
@@ -87,25 +85,32 @@ defmodule Graph.Directed do
     end
   end
 
-  def reachable(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &vertex_id/1)
+  def reachable(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
+      when is_list(vs) do
+    vs = Enum.map(vs, vertex_identifier)
     for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(vertices, id)
   end
 
-  def reachable_neighbors(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &vertex_id/1)
+  def reachable_neighbors(
+        %Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g,
+        vs
+      )
+      when is_list(vs) do
+    vs = Enum.map(vs, vertex_identifier)
 
     for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)),
         do: Map.get(vertices, id)
   end
 
-  def reaching(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &vertex_id/1)
+  def reaching(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
+      when is_list(vs) do
+    vs = Enum.map(vs, vertex_identifier)
     for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(vertices, id)
   end
 
-  def reaching_neighbors(%Graph{vertices: vertices} = g, vs) when is_list(vs) do
-    vs = Enum.map(vs, &vertex_id/1)
+  def reaching_neighbors(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
+      when is_list(vs) do
+    vs = Enum.map(vs, vertex_identifier)
     for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(vertices, id)
   end
 
