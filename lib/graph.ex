@@ -2162,7 +2162,7 @@ defmodule Graph do
           out_edges: oe,
           edges: meta,
           vertex_identifier: vertex_identifier
-        },
+        } = graph,
         vs
       ) do
     allowed =
@@ -2173,7 +2173,7 @@ defmodule Graph do
 
     Enum.reduce(allowed, Graph.new(type: type), fn v_id, sg ->
       v = Map.get(vertices, v_id)
-      sg = Graph.add_vertex(sg, v)
+      sg = Graph.add_vertex(sg, v, Graph.vertex_labels(graph, v))
 
       oe
       |> Map.get(v_id, MapSet.new())
