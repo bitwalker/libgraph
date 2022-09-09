@@ -7,14 +7,14 @@ defmodule Graph.SerializerTests do
     assert {:ok,
             """
             strict digraph {
-                "start"
-                "{:complex, :label}"
-                "c"
-                "finish"
-                "start" -> "{:complex, :label}" [weight=3]
-                "{:complex, :label}" -> "c" [label=5; weight=1]
-                "{:complex, :label}" -> "finish" [label=1.0; weight=3]
-                "c" -> "finish" [weight=1]
+                97[label="start"]
+                98[label="{:complex, :label}"]
+                99[label="c"]
+                100[label="finish"]
+                97 -> 98 [weight=3]
+                98 -> 99 [label=5; weight=1]
+                98 -> 100 [label=1.0; weight=3]
+                99 -> 100 [weight=1]
             }
             """} = Graph.to_dot(g)
   end
