@@ -11,8 +11,8 @@ defmodule PriorityQueue do
   defstruct priorities: nil
 
   @type t :: %__MODULE__{
-    priorities: :gb_trees.tree(integer, :queue.queue(term))
-  }
+          priorities: :gb_trees.tree(integer, :queue.queue(term))
+        }
 
   @doc """
   Create a new priority queue
@@ -78,7 +78,7 @@ defmodule PriorityQueue do
     case pop(pq) do
       {:empty, _} ->
         :empty
-      
+
       {{:value, _} = val, _} ->
         val
     end

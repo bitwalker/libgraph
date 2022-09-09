@@ -30,11 +30,15 @@ defmodule Graph do
             edges: %{},
             vertex_labels: %{},
             vertices: %{},
-            type: :directed
+            type: :directed,
+            vertex_identifier: &Graph.Utils.vertex_id/1
 
   alias Graph.{Edge, EdgeSpecificationError}
 
-  @type vertex_id :: non_neg_integer
+  @typedoc """
+  Identifier of a vertex. By default a non_neg_integer from `Graph.Utils.vertex_id/1` utilizing `:erlang.phash2`.
+  """
+  @type vertex_id :: non_neg_integer() | term()
   @type vertex :: term
   @type label :: term
   @type edge_weight :: integer | float
@@ -47,24 +51,24 @@ defmodule Graph do
           out_edges: %{vertex_id => MapSet.t()},
           edges: %{edge_key => edge_value},
           vertex_labels: %{vertex_id => term},
-          vertices: vertices,
-          type: graph_type
+          vertices: %{vertex_id => vertex},
+          type: graph_type,
+          vertex_identifier: (vertex() -> term())
         }
-
-  @doc """
-  Creates a new directed graph.
-  """
-  @spec new() :: t
-  def new(), do: new(type: :directed)
 
   @doc """
   Creates a new graph using the provided options.
 
   ## Options
 
-  - `type: :directed | :undirected`, specifies what type of graph this is
+  - `type: :directed | :undirected`, specifies what type of graph this is. Defaults to a `:directed` graph.
+  - `vertex_identifier`: a function which accepts a vertex and returns a unique identifier of said vertex.
+    Defaults to `Graph.Utils.vertex_id/1`, a hash of the whole vertex utilizing `:erlang.phash2/2`.
 
   ## Example
+
+      iex> Graph.new()
+      #Graph<type: directed, vertices: [], edges: []>
 
       iex> g = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:b, :a}])
       ...> Graph.edges(g)
@@ -73,12 +77,15 @@ defmodule Graph do
       iex> g = Graph.new(type: :directed) |> Graph.add_edges([{:a, :b}, {:b, :a}])
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :a}]
+
+      iex> g = Graph.new(vertex_identifier: fn v -> :erlang.phash2(v) end) |> Graph.add_edges([{:a, :b}, {:b, :a}])
+      ...> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :a}]
   """
-  @type new_opt :: {:type, graph_type}
-  @type new_opts :: [new_opt]
-  @spec new(new_opts) :: t
-  def new(type: type) when type in [:directed, :undirected] do
-    %__MODULE__{type: type}
+  def new(opts \\ []) do
+    type = Keyword.get(opts, :type) || :directed
+    vertex_identifier = Keyword.get(opts, :vertex_identifier) || (&Graph.Utils.vertex_id/1)
+    %__MODULE__{type: type, vertex_identifier: vertex_identifier}
   end
 
   @doc """
@@ -422,35 +429,50 @@ defmodule Graph do
       []
   """
   @spec edges(t, vertex) :: [Edge.t()]
-  def edges(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta, vertices: vs}, v) do
-    v_id = Graph.Utils.vertex_id(v)
+  def edges(
+        %__MODULE__{
+          in_edges: ie,
+          out_edges: oe,
+          edges: meta,
+          vertices: vs,
+          vertex_identifier: vertex_identifier
+        },
+        v
+      ) do
+    v_id = vertex_identifier.(v)
     v_in = Map.get(ie, v_id) || MapSet.new()
     v_out = Map.get(oe, v_id) || MapSet.new()
     v_all = MapSet.union(v_in, v_out)
 
-    e_in = Enum.flat_map(v_all, fn v2_id ->
-      case Map.get(meta, {v2_id, v_id}) do
-        nil -> []
-        edge_meta when is_map(edge_meta) ->
-          v2 = Map.get(vs, v2_id)
+    e_in =
+      Enum.flat_map(v_all, fn v2_id ->
+        case Map.get(meta, {v2_id, v_id}) do
+          nil ->
+            []
 
-          for {label, weight} <- edge_meta do
-            Edge.new(v2, v, label: label, weight: weight)
-          end
-      end
-    end)
+          edge_meta when is_map(edge_meta) ->
+            v2 = Map.get(vs, v2_id)
 
-    e_out = Enum.flat_map(v_all, fn v2_id ->
-      case Map.get(meta, {v_id, v2_id}) do
-        nil -> []
-        edge_meta when is_map(edge_meta) ->
-          v2 = Map.get(vs, v2_id)
+            for {label, weight} <- edge_meta do
+              Edge.new(v2, v, label: label, weight: weight)
+            end
+        end
+      end)
 
-          for {label, weight} <- edge_meta do
-            Edge.new(v, v2, label: label, weight: weight)
-          end
-      end
-    end)
+    e_out =
+      Enum.flat_map(v_all, fn v2_id ->
+        case Map.get(meta, {v_id, v2_id}) do
+          nil ->
+            []
+
+          edge_meta when is_map(edge_meta) ->
+            v2 = Map.get(vs, v2_id)
+
+            for {label, weight} <- edge_meta do
+              Edge.new(v, v2, label: label, weight: weight)
+            end
+        end
+      end)
 
     e_in ++ e_out
   end
@@ -471,9 +493,9 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
   """
   @spec edges(t, vertex, vertex) :: [Edge.t()]
-  def edges(%__MODULE__{type: type, edges: meta}, v1, v2) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  def edges(%__MODULE__{type: type, edges: meta, vertex_identifier: vertex_identifier}, v1, v2) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          edge_meta <- Map.get(meta, edge_key, %{}) do
       case type do
@@ -544,9 +566,9 @@ defmodule Graph do
     do_edge(g, v1, v2, label)
   end
 
-  defp do_edge(%__MODULE__{edges: meta}, v1, v2, label) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  defp do_edge(%__MODULE__{edges: meta, vertex_identifier: vertex_identifier}, v1, v2, label) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          {:ok, edge_meta} <- Map.fetch(meta, edge_key),
          {:ok, weight} <- Map.fetch(edge_meta, label) do
@@ -590,8 +612,8 @@ defmodule Graph do
       false
   """
   @spec has_vertex?(t, vertex) :: boolean
-  def has_vertex?(%__MODULE__{vertices: vs}, v) do
-    v_id = Graph.Utils.vertex_id(v)
+  def has_vertex?(%__MODULE__{vertices: vs, vertex_identifier: vertex_identifier}, v) do
+    v_id = vertex_identifier.(v)
     Map.has_key?(vs, v_id)
   end
 
@@ -606,8 +628,8 @@ defmodule Graph do
       [:my_label]
   """
   @spec vertex_labels(t, vertex) :: term | []
-  def vertex_labels(%__MODULE__{vertex_labels: labels}, v) do
-    with v1_id <- Graph.Utils.vertex_id(v),
+  def vertex_labels(%__MODULE__{vertex_labels: labels, vertex_identifier: vertex_identifier}, v) do
+    with v1_id <- vertex_identifier.(v),
          true <- Map.has_key?(labels, v1_id) do
       Map.get(labels, v1_id)
     else
@@ -635,9 +657,13 @@ defmodule Graph do
   @spec add_vertex(t, vertex, label) :: t
   def add_vertex(g, v, labels \\ [])
 
-  def add_vertex(%__MODULE__{vertices: vs, vertex_labels: vl} = g, v, labels)
+  def add_vertex(
+        %__MODULE__{vertices: vs, vertex_labels: vl, vertex_identifier: vertex_identifier} = g,
+        v,
+        labels
+      )
       when is_list(labels) do
-    id = Graph.Utils.vertex_id(v)
+    id = vertex_identifier.(v)
 
     case Map.get(vs, id) do
       nil ->
@@ -685,9 +711,14 @@ defmodule Graph do
       [:foo, :bar]
   """
   @spec label_vertex(t, vertex, term) :: t | {:error, {:invalid_vertex, vertex}}
-  def label_vertex(%__MODULE__{vertices: vs, vertex_labels: labels} = g, v, vlabels)
+  def label_vertex(
+        %__MODULE__{vertices: vs, vertex_labels: labels, vertex_identifier: vertex_identifier} =
+          g,
+        v,
+        vlabels
+      )
       when is_list(vlabels) do
-    with v_id <- Graph.Utils.vertex_id(v),
+    with v_id <- vertex_identifier.(v),
          true <- Map.has_key?(vs, v_id),
          old_vlabels <- Map.get(labels, v_id),
          new_vlabels <- old_vlabels ++ vlabels,
@@ -715,10 +746,18 @@ defmodule Graph do
     {:error, {:invalid_vertex, :b}}
   """
   @spec remove_vertex_labels(t, vertex) :: t | {:error, {:invalid_vertex, vertex}}
-  def remove_vertex_labels(%__MODULE__{vertices: vertices, vertex_labels: vertex_labels} = graph, vertex) do
+  def remove_vertex_labels(
+        %__MODULE__{
+          vertices: vertices,
+          vertex_labels: vertex_labels,
+          vertex_identifier: vertex_identifier
+        } = graph,
+        vertex
+      ) do
     graph.vertex_labels
     |> Map.put(vertex, [])
-    with vertex_id <- Graph.Utils.vertex_id(vertex),
+
+    with vertex_id <- vertex_identifier.(vertex),
          true <- Map.has_key?(vertices, vertex_id),
          labels <- Map.put(vertex_labels, vertex_id, []) do
       %__MODULE__{graph | vertex_labels: labels}
@@ -741,13 +780,18 @@ defmodule Graph do
       [%Graph.Edge{v1: :b, v2: :c}, %Graph.Edge{v1: :c, v2: :d}, %Graph.Edge{v1: :c, v2: :e}, %Graph.Edge{v1: :e, v2: :b}]
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
-  def replace_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges: em} = g, v, rv) do
+  def replace_vertex(
+        %__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertex_identifier: vertex_identifier} =
+          g,
+        v,
+        rv
+      ) do
     vs = g.vertices
     labels = g.vertex_labels
 
-    with v_id <- Graph.Utils.vertex_id(v),
+    with v_id <- vertex_identifier.(v),
          true <- Map.has_key?(vs, v_id),
-         rv_id <- Graph.Utils.vertex_id(rv),
+         rv_id <- vertex_identifier.(rv),
          vs <- Map.put(Map.delete(vs, v_id), rv_id, rv) do
       oe =
         for {from_id, to} = e <- oe, into: %{} do
@@ -825,11 +869,15 @@ defmodule Graph do
       []
   """
   @spec delete_vertex(t, vertex) :: t
-  def delete_vertex(%__MODULE__{out_edges: oe, in_edges: ie, edges: em} = g, v) do
+  def delete_vertex(
+        %__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertex_identifier: vertex_identifier} =
+          g,
+        v
+      ) do
     vs = g.vertices
     ls = g.vertex_labels
 
-    with v_id <- Graph.Utils.vertex_id(v),
+    with v_id <- vertex_identifier.(v),
          true <- Map.has_key?(vs, v_id),
          oe <- Map.delete(oe, v_id),
          ie <- Map.delete(ie, v_id),
@@ -910,9 +958,9 @@ defmodule Graph do
     do_add_edge(g, v1, v2, opts)
   end
 
-  defp do_add_edge(%__MODULE__{} = g, v1, v2, opts) do
-    v1_id = Graph.Utils.vertex_id(v1)
-    v2_id = Graph.Utils.vertex_id(v2)
+  defp do_add_edge(%__MODULE__{vertex_identifier: vertex_identifier} = g, v1, v2, opts) do
+    v1_id = vertex_identifier.(v1)
+    v2_id = vertex_identifier.(v2)
 
     %__MODULE__{in_edges: ie, out_edges: oe, edges: meta} =
       g = g |> add_vertex(v1) |> add_vertex(v2)
@@ -1017,9 +1065,15 @@ defmodule Graph do
     do_split_edge(g, v1, v2, v3)
   end
 
-  defp do_split_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: em} = g, v1, v2, v3) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  defp do_split_edge(
+         %__MODULE__{in_edges: ie, out_edges: oe, edges: em, vertex_identifier: vertex_identifier} =
+           g,
+         v1,
+         v2,
+         v3
+       ) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          {:ok, v1_out} <- Map.fetch(oe, v1_id),
          {:ok, v2_in} <- Map.fetch(ie, v2_id),
          true <- MapSet.member?(v1_out, v2_id),
@@ -1094,9 +1148,15 @@ defmodule Graph do
     do_update_labelled_edge(g, v1, v2, old_label, opts)
   end
 
-  defp do_update_labelled_edge(%__MODULE__{edges: em} = g, v1, v2, old_label, opts) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  defp do_update_labelled_edge(
+         %__MODULE__{edges: em, vertex_identifier: vertex_identifier} = g,
+         v1,
+         v2,
+         old_label,
+         opts
+       ) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          {:ok, meta} <- Map.fetch(em, edge_key),
          {:ok, _} <- Map.fetch(meta, old_label),
@@ -1152,9 +1212,18 @@ defmodule Graph do
     do_delete_edge(g, v1, v2)
   end
 
-  defp do_delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  defp do_delete_edge(
+         %__MODULE__{
+           in_edges: ie,
+           out_edges: oe,
+           edges: meta,
+           vertex_identifier: vertex_identifier
+         } = g,
+         v1,
+         v2
+       ) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          {:ok, v1_out} <- Map.fetch(oe, v1_id),
          {:ok, v2_in} <- Map.fetch(ie, v2_id) do
@@ -1213,9 +1282,19 @@ defmodule Graph do
     do_delete_edge(g, v1, v2, label)
   end
 
-  defp do_delete_edge(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2, label) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  defp do_delete_edge(
+         %__MODULE__{
+           in_edges: ie,
+           out_edges: oe,
+           edges: meta,
+           vertex_identifier: vertex_identifier
+         } = g,
+         v1,
+         v2,
+         label
+       ) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          {:ok, v1_out} <- Map.fetch(oe, v1_id),
          {:ok, v2_in} <- Map.fetch(ie, v2_id),
@@ -1325,9 +1404,18 @@ defmodule Graph do
     do_delete_edges(g, v1, v2)
   end
 
-  defp do_delete_edges(%__MODULE__{in_edges: ie, out_edges: oe, edges: meta} = g, v1, v2) do
-    with v1_id <- Graph.Utils.vertex_id(v1),
-         v2_id <- Graph.Utils.vertex_id(v2),
+  defp do_delete_edges(
+         %__MODULE__{
+           in_edges: ie,
+           out_edges: oe,
+           edges: meta,
+           vertex_identifier: vertex_identifier
+         } = g,
+         v1,
+         v2
+       ) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          true <- Map.has_key?(meta, edge_key),
          v1_out <- Map.get(oe, v1_id),
@@ -1565,7 +1653,7 @@ defmodule Graph do
     raise "cliques/1 can not be called on a directed graph"
   end
 
-  def cliques(%__MODULE__{} = g) do
+  def cliques(%__MODULE__{vertex_identifier: vertex_identifier} = g) do
     # We do vertex ordering as described in Bron-Kerbosch
     # to improve the worst-case performance of the algorithm
     p =
@@ -1573,7 +1661,7 @@ defmodule Graph do
       |> k_core_components()
       |> Enum.sort_by(fn {k, _} -> k end, fn a, b -> a >= b end)
       |> Stream.flat_map(fn {_, vs} -> vs end)
-      |> Enum.map(&Graph.Utils.vertex_id/1)
+      |> Enum.map(&vertex_identifier.(&1))
 
     g
     |> detect_cliques(_r = [], p, _x = [], _acc = [])
@@ -1837,8 +1925,17 @@ defmodule Graph do
       ...> Graph.in_degree(g, :b)
       1
   """
-  def in_degree(%__MODULE__{type: :undirected, in_edges: ie, out_edges: oe, edges: meta}, v) do
-    v_id = Graph.Utils.vertex_id(v)
+  def in_degree(
+        %__MODULE__{
+          type: :undirected,
+          in_edges: ie,
+          out_edges: oe,
+          edges: meta,
+          vertex_identifier: vertex_identifier
+        },
+        v
+      ) do
+    v_id = vertex_identifier.(v)
     v_in = Map.get(ie, v_id, MapSet.new())
     v_out = Map.get(oe, v_id, MapSet.new())
     v_all = MapSet.union(v_in, v_out)
@@ -1857,8 +1954,8 @@ defmodule Graph do
     end)
   end
 
-  def in_degree(%__MODULE__{in_edges: ie, edges: meta}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
+  def in_degree(%__MODULE__{in_edges: ie, edges: meta, vertex_identifier: vertex_identifier}, v) do
+    with v_id <- vertex_identifier.(v),
          {:ok, v_in} <- Map.fetch(ie, v_id) do
       Enum.reduce(v_in, 0, fn v1_id, sum ->
         sum + map_size(Map.get(meta, {v1_id, v_id}))
@@ -1889,8 +1986,8 @@ defmodule Graph do
     in_degree(g, v)
   end
 
-  def out_degree(%__MODULE__{out_edges: oe, edges: meta}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
+  def out_degree(%__MODULE__{out_edges: oe, edges: meta, vertex_identifier: vertex_identifier}, v) do
+    with v_id <- vertex_identifier.(v),
          {:ok, v_out} <- Map.fetch(oe, v_id) do
       Enum.reduce(v_out, 0, fn v2_id, sum ->
         sum + map_size(Map.get(meta, {v_id, v2_id}))
@@ -1914,8 +2011,16 @@ defmodule Graph do
       []
   """
   @spec neighbors(t, vertex) :: [vertex]
-  def neighbors(%__MODULE__{in_edges: ie, out_edges: oe, vertices: vs}, v) do
-    v_id = Graph.Utils.vertex_id(v)
+  def neighbors(
+        %__MODULE__{
+          in_edges: ie,
+          out_edges: oe,
+          vertices: vs,
+          vertex_identifier: vertex_identifier
+        },
+        v
+      ) do
+    v_id = vertex_identifier.(v)
     v_in = Map.get(ie, v_id, MapSet.new())
     v_out = Map.get(oe, v_id, MapSet.new())
     v_all = MapSet.union(v_in, v_out)
@@ -1938,8 +2043,11 @@ defmodule Graph do
     neighbors(g, v)
   end
 
-  def in_neighbors(%__MODULE__{in_edges: ie, vertices: vs}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
+  def in_neighbors(
+        %__MODULE__{in_edges: ie, vertices: vs, vertex_identifier: vertex_identifier},
+        v
+      ) do
+    with v_id <- vertex_identifier.(v),
          {:ok, v_in} <- Map.fetch(ie, v_id) do
       Enum.map(v_in, &Map.get(vs, &1))
     else
@@ -1963,8 +2071,16 @@ defmodule Graph do
     edges(g, v)
   end
 
-  def in_edges(%__MODULE__{vertices: vs, in_edges: ie, edges: meta}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
+  def in_edges(
+        %__MODULE__{
+          vertices: vs,
+          in_edges: ie,
+          edges: meta,
+          vertex_identifier: vertex_identifier
+        },
+        v
+      ) do
+    with v_id <- vertex_identifier.(v),
          {:ok, v_in} <- Map.fetch(ie, v_id) do
       Enum.flat_map(v_in, fn v1_id ->
         v1 = Map.get(vs, v1_id)
@@ -1994,8 +2110,11 @@ defmodule Graph do
     neighbors(g, v)
   end
 
-  def out_neighbors(%__MODULE__{vertices: vs, out_edges: oe}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
+  def out_neighbors(
+        %__MODULE__{vertices: vs, out_edges: oe, vertex_identifier: vertex_identifier},
+        v
+      ) do
+    with v_id <- vertex_identifier.(v),
          {:ok, v_out} <- Map.fetch(oe, v_id) do
       Enum.map(v_out, &Map.get(vs, &1))
     else
@@ -2019,8 +2138,16 @@ defmodule Graph do
     edges(g, v)
   end
 
-  def out_edges(%__MODULE__{vertices: vs, out_edges: oe, edges: meta}, v) do
-    with v_id <- Graph.Utils.vertex_id(v),
+  def out_edges(
+        %__MODULE__{
+          vertices: vs,
+          out_edges: oe,
+          edges: meta,
+          vertex_identifier: vertex_identifier
+        },
+        v
+      ) do
+    with v_id <- vertex_identifier.(v),
          {:ok, v_out} <- Map.fetch(oe, v_id) do
       Enum.flat_map(v_out, fn v2_id ->
         v2 = Map.get(vs, v2_id)
@@ -2030,8 +2157,8 @@ defmodule Graph do
         end)
       end)
     else
-      _ -> 
-        [] 
+      _ ->
+        []
     end
   end
 
@@ -2041,10 +2168,19 @@ defmodule Graph do
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
-  def subgraph(%__MODULE__{type: type, vertices: vertices, out_edges: oe, edges: meta}, vs) do
+  def subgraph(
+        %__MODULE__{
+          type: type,
+          vertices: vertices,
+          out_edges: oe,
+          edges: meta,
+          vertex_identifier: vertex_identifier
+        },
+        vs
+      ) do
     allowed =
       vs
-      |> Enum.map(&Graph.Utils.vertex_id/1)
+      |> Enum.map(&vertex_identifier.(&1))
       |> Enum.filter(&Map.has_key?(vertices, &1))
       |> MapSet.new()
 

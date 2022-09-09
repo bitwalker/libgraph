@@ -4,18 +4,19 @@ defmodule Graph.SerializerTests do
   test "to_dot/1" do
     g = kitchen_sink_graph()
 
-    assert {:ok, """
-    strict digraph {
-        "start"
-        "{:complex, :label}"
-        "c"
-        "finish"
-        "start" -> "{:complex, :label}" [weight=3]
-        "{:complex, :label}" -> "c" [label=5; weight=1]
-        "{:complex, :label}" -> "finish" [label=1.0; weight=3]
-        "c" -> "finish" [weight=1]
-    }
-    """} = Graph.to_dot(g)
+    assert {:ok,
+            """
+            strict digraph {
+                "start"
+                "{:complex, :label}"
+                "c"
+                "finish"
+                "start" -> "{:complex, :label}" [weight=3]
+                "{:complex, :label}" -> "c" [label=5; weight=1]
+                "{:complex, :label}" -> "finish" [label=1.0; weight=3]
+                "c" -> "finish" [weight=1]
+            }
+            """} = Graph.to_dot(g)
   end
 
   test "to_edgelist" do
@@ -23,17 +24,18 @@ defmodule Graph.SerializerTests do
 
     {:ok, actual} = Graph.to_edgelist(g)
 
-    expected =  """
-"start" "{:complex, :label}"
-"{:complex, :label}" "c"
-"{:complex, :label}" "finish"
-"c" "finish"
-"""
+    expected = """
+    "start" "{:complex, :label}"
+    "{:complex, :label}" "c"
+    "{:complex, :label}" "finish"
+    "c" "finish"
+    """
+
     assert actual == expected
   end
 
   defp kitchen_sink_graph do
-    Graph.new
+    Graph.new()
     |> Graph.add_vertices([:a, :b, :c, :d])
     |> Graph.add_edges([{:a, :b, weight: 3}, {:b, :c, label: 5}, {:b, :d, label: 1.0}, {:c, :d}])
     |> Graph.label_vertex(:a, :start)

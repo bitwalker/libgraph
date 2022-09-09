@@ -5,6 +5,21 @@ defmodule GraphTest do
   alias Graph.Edge
   alias Graph.Test.Generators
 
+  test "injectable vertex_identifier" do
+    g = Graph.new()
+
+    g_with_custom_vertex_identifier =
+      Graph.new(vertex_identifier: fn v -> :erlang.phash2(v, trunc(:math.pow(2, 16))) end)
+
+    g = Graph.add_vertex(g, :v1, :labelA)
+
+    g_with_custom_vertex_identifier =
+      Graph.add_vertex(g_with_custom_vertex_identifier, :v1, :labelA)
+
+    assert Graph.has_vertex?(g, :v1)
+    assert Graph.has_vertex?(g_with_custom_vertex_identifier, :v1)
+  end
+
   test "delete vertex" do
     g = Graph.new()
     g = Graph.add_vertex(g, :v1, :labelA)
@@ -16,7 +31,7 @@ defmodule GraphTest do
 
   test "delete vertices" do
     graph =
-      Graph.new
+      Graph.new()
       |> Graph.add_vertices([1, 2, 4, 6])
       |> Graph.add_edge(1, 2)
       |> Graph.add_edge(2, 4)
@@ -35,23 +50,43 @@ defmodule GraphTest do
   end
 
   test "inspect" do
-    g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])
-    ug = Graph.new(type: :undirected) |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c, weight: 3}, {:b, :a, label: {:complex, :label}}])
+    g =
+      Graph.new()
+      |> Graph.add_edges([
+        {:a, :b},
+        {:a, :b, label: :foo},
+        {:b, :c, weight: 3},
+        {:b, :a, label: {:complex, :label}}
+      ])
+
+    ug =
+      Graph.new(type: :undirected)
+      |> Graph.add_edges([
+        {:a, :b},
+        {:a, :b, label: :foo},
+        {:b, :c, weight: 3},
+        {:b, :a, label: {:complex, :label}}
+      ])
 
     # structs: false
-    structs_false = "#{inspect g, structs: false}"
+    structs_false = "#{inspect(g, structs: false)}"
     doc = Inspect.Algebra.format(Inspect.Algebra.to_doc(g, %Inspect.Opts{structs: false}), 99999)
     assert ^structs_false = :erlang.iolist_to_binary(doc)
 
     # pretty printed
-    str = "#{inspect g}"
-    assert "#Graph<type: directed, vertices: [:a, :b, :c], edges: [:a -[foo]-> :b, :a -> :b, :b -[{:complex, :label}]-> :a, :b -> :c]>" = str
-    ustr = "#{inspect ug}"
-    assert "#Graph<type: undirected, vertices: [:a, :b, :c], edges: [:a <-[foo]-> :b, :a <-> :b, :a <-[{:complex, :label}]-> :b, :b <-> :c]>" = ustr
+    str = "#{inspect(g)}"
+
+    assert "#Graph<type: directed, vertices: [:a, :b, :c], edges: [:a -[foo]-> :b, :a -> :b, :b -[{:complex, :label}]-> :a, :b -> :c]>" =
+             str
+
+    ustr = "#{inspect(ug)}"
+
+    assert "#Graph<type: undirected, vertices: [:a, :b, :c], edges: [:a <-[foo]-> :b, :a <-> :b, :a <-[{:complex, :label}]-> :b, :b <-> :c]>" =
+             ustr
 
     # large graph
-    g = Enum.reduce(1..150, Graph.new, fn i, g -> Graph.add_edge(g, i, i+1) end)
-    str = "#{inspect g}"
+    g = Enum.reduce(1..150, Graph.new(), fn i, g -> Graph.add_edge(g, i, i + 1) end)
+    str = "#{inspect(g)}"
     assert "#Graph<type: directed, num_vertices: 151, num_edges: 150>" = str
   end
 
@@ -103,18 +138,21 @@ defmodule GraphTest do
   end
 
   test "edges/2 returns both directions" do
-    generated_result = Graph.new()
-        |> Graph.add_edges([
-          {:a, :b, label: "label1"},
-          {:a, :b, label: "label2"},
-          {:b, :a, label: "label3"}
-        ])
-        |> Graph.edges(:a)
+    generated_result =
+      Graph.new()
+      |> Graph.add_edges([
+        {:a, :b, label: "label1"},
+        {:a, :b, label: "label2"},
+        {:b, :a, label: "label3"}
+      ])
+      |> Graph.edges(:a)
+
     expected_result = [
       %Graph.Edge{label: "label3", v1: :b, v2: :a, weight: 1},
       %Graph.Edge{label: "label1", v1: :a, v2: :b, weight: 1},
-      %Graph.Edge{label: "label2", v1: :a, v2: :b, weight: 1},
+      %Graph.Edge{label: "label2", v1: :a, v2: :b, weight: 1}
     ]
+
     assert generated_result == expected_result
   end
 
@@ -140,15 +178,16 @@ defmodule GraphTest do
   end
 
   test "find all paths on loopy graph" do
-    g = Graph.new
-        |> Graph.add_edge(:a, :b)
-        |> Graph.add_edge(:a, :c)
-        |> Graph.add_edge(:b, :d)
-        |> Graph.add_edge(:c, :d)
-        |> Graph.add_edge(:d, :e)
-        |> Graph.add_edge(:e, :d)
-        |> Graph.add_edge(:d, :f)
-        |> Graph.add_edge(:f, :d)
+    g =
+      Graph.new()
+      |> Graph.add_edge(:a, :b)
+      |> Graph.add_edge(:a, :c)
+      |> Graph.add_edge(:b, :d)
+      |> Graph.add_edge(:c, :d)
+      |> Graph.add_edge(:d, :e)
+      |> Graph.add_edge(:e, :d)
+      |> Graph.add_edge(:d, :f)
+      |> Graph.add_edge(:f, :d)
 
     assert [[:a, :c, :d], [:a, :b, :d]] == Graph.get_paths(g, :a, :d)
   end
@@ -171,7 +210,7 @@ defmodule GraphTest do
     assert is_list(shortest_dg)
 
     assert is_list(paths)
-    [shortest|_] = Enum.sort_by(paths, &length/1)
+    [shortest | _] = Enum.sort_by(paths, &length/1)
     shortest_len = length(shortest)
 
     assert ^shortest_len = length(shortest_dg)
@@ -182,16 +221,72 @@ defmodule GraphTest do
     g = build_complex_graph()
 
     shortest_g = Graph.dijkstra(g, "start", "end")
+
     assert shortest_g ==
-      ["start", "start_0", 96, 97, 98, 33, 100, 34, 35, 36, 37, 19, 65, 66, 67, "end_0", "end"]
+             [
+               "start",
+               "start_0",
+               96,
+               97,
+               98,
+               33,
+               100,
+               34,
+               35,
+               36,
+               37,
+               19,
+               65,
+               66,
+               67,
+               "end_0",
+               "end"
+             ]
+  end
+
+  test "shortest path for complex undirected graph" do
+    g = build_complex_graph(:undirected)
+
+    shortest_g = Graph.dijkstra(g, "start", "end")
+
+    assert shortest_g ==
+             ["start", "start_0", 95, 94, 93, 39, 38, 21, 69, 68, "end_0", "end"]
   end
 
   test "shortest path for complex graph using float weights" do
     g = build_complex_graph_float()
 
     shortest_g = Graph.dijkstra(g, "start", "end")
+
     assert shortest_g ==
-      ["start", "start_0", 96, 97, 98, 33, 100, 34, 35, 36, 37, 19, 65, 66, 67, "end_0", "end"]
+             [
+               "start",
+               "start_0",
+               96,
+               97,
+               98,
+               33,
+               100,
+               34,
+               35,
+               36,
+               37,
+               19,
+               65,
+               66,
+               67,
+               "end_0",
+               "end"
+             ]
+  end
+
+  test "shortest path for complex undirected graph using float weights" do
+    g = build_complex_graph_float(:undirected)
+
+    shortest_g = Graph.dijkstra(g, "start", "end")
+
+    assert shortest_g ==
+             ["start", "start_0", 95, 94, 93, 39, 38, 21, 69, 68, "end_0", "end"]
   end
 
   test "shortest paths for complex graph using signed weights (negative and positive)" do
@@ -253,6 +348,7 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f])
       |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:d, :e}, {:e, :a}, {:e, :b}, {:d, :f}])
+
     cliques = Graph.cliques(g)
     assert [[:a, :b, :e], [:b, :c], [:c, :d], [:d, :e], [:d, :f]] = cliques
   end
@@ -262,6 +358,7 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f])
       |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:d, :e}, {:e, :a}, {:e, :b}, {:d, :f}])
+
     assert [[:a, :b, :e]] = Graph.k_cliques(g, 3)
   end
 
@@ -270,9 +367,18 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-          {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
-          {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
-        ])
+        {:a, :b},
+        {:a, :c},
+        {:a, :d},
+        {:b, :c},
+        {:b, :d},
+        {:c, :d},
+        {:c, :e},
+        {:e, :f},
+        {:f, :g},
+        {:f, :h}
+      ])
+
     zero_core = Graph.k_core(g, 0)
     assert Graph.is_subgraph?(zero_core, g)
     assert Graph.vertices(g) == Graph.vertices(zero_core)
@@ -289,20 +395,59 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-        {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d}, {:d, :e},
-        {:e, :f}, {:f, :g}, {:g, :h}, {:h, :i}, {:i, :f}, {:f, :h}, {:i, :g}
+        {:a, :b},
+        {:a, :c},
+        {:a, :d},
+        {:b, :c},
+        {:b, :d},
+        {:c, :d},
+        {:d, :e},
+        {:e, :f},
+        {:f, :g},
+        {:g, :h},
+        {:h, :i},
+        {:i, :f},
+        {:f, :h},
+        {:i, :g}
       ])
+
     three_core = Graph.k_core(g, 3)
     assert Graph.vertices(three_core) == [:a, :b, :c, :d, :f, :g, :h, :i]
 
     g =
-      Graph.new
+      Graph.new()
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :a}, {:b, :c}, {:b, :d}, {:c, :a}, {:c, :b}, {:c, :d}, {:d, :a}, {:d, :b}, {:d, :c},
-      {:d, :e}, {:e, :d}, {:e, :f}, {:f, :e}, {:f, :g}, {:g, :f}, {:g, :h}, {:h, :g}, {:h, :i}, {:i, :h}, {:i, :f}, {:f, :i}, {:h, :f},
-      {:f, :h}, {:g, :i}, {:i, :g}
-    ])
+        {:a, :b},
+        {:a, :c},
+        {:a, :d},
+        {:b, :a},
+        {:b, :c},
+        {:b, :d},
+        {:c, :a},
+        {:c, :b},
+        {:c, :d},
+        {:d, :a},
+        {:d, :b},
+        {:d, :c},
+        {:d, :e},
+        {:e, :d},
+        {:e, :f},
+        {:f, :e},
+        {:f, :g},
+        {:g, :f},
+        {:g, :h},
+        {:h, :g},
+        {:h, :i},
+        {:i, :h},
+        {:i, :f},
+        {:f, :i},
+        {:h, :f},
+        {:f, :h},
+        {:g, :i},
+        {:i, :g}
+      ])
+
     three_core = Graph.k_core(g, 3)
     assert Graph.vertices(three_core) == [:a, :b, :c, :d, :f, :g, :h, :i]
   end
@@ -312,9 +457,19 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-      {:a, :a}, {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
-      {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
-    ])
+        {:a, :a},
+        {:a, :b},
+        {:a, :c},
+        {:a, :d},
+        {:b, :c},
+        {:b, :d},
+        {:c, :d},
+        {:c, :e},
+        {:e, :f},
+        {:f, :g},
+        {:f, :h}
+      ])
+
     components = Graph.k_core_components(g)
     assert [:i] = components[0]
     assert [:e, :f, :g, :h] = components[1]
@@ -327,9 +482,18 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
-      {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
-    ])
+        {:a, :b},
+        {:a, :c},
+        {:a, :d},
+        {:b, :c},
+        {:b, :d},
+        {:c, :d},
+        {:c, :e},
+        {:e, :f},
+        {:f, :g},
+        {:f, :h}
+      ])
+
     assert 3 = Graph.coreness(g, :a)
   end
 
@@ -338,9 +502,18 @@ defmodule GraphTest do
       Graph.new(type: :undirected)
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g, :h, :i])
       |> Graph.add_edges([
-      {:a, :b}, {:a, :c}, {:a, :d}, {:b, :c}, {:b, :d}, {:c, :d},
-      {:c, :e}, {:e, :f}, {:f, :g}, {:f, :h}
-    ])
+        {:a, :b},
+        {:a, :c},
+        {:a, :d},
+        {:b, :c},
+        {:b, :d},
+        {:c, :d},
+        {:c, :e},
+        {:e, :f},
+        {:f, :g},
+        {:f, :h}
+      ])
+
     assert 3 = Graph.degeneracy(g)
     dg = Graph.degeneracy_core(g)
     assert [:a, :b, :c, :d] = Graph.vertices(dg)
@@ -349,7 +522,7 @@ defmodule GraphTest do
   @tag timeout: 120_000
   @enron_emails Path.join([__DIR__, "fixtures", "email-Enron.txt"])
   test "degeneracy/1 - Enron emails" do
-    g = Graph.Test.Fixtures.Parser.parse @enron_emails
+    g = Graph.Test.Fixtures.Parser.parse(@enron_emails)
     assert 36_692 = Graph.num_vertices(g)
     assert 183_831 = Graph.num_edges(g)
     assert 43 = Graph.degeneracy(g)
@@ -358,14 +531,14 @@ defmodule GraphTest do
   @tag timeout: 120_000
   @hamster_friends Path.join([__DIR__, "fixtures", "petster", "edges.txt"])
   test "degeneracy/1 - Petster hamster friendships" do
-    g = Graph.Test.Fixtures.Parser.parse @hamster_friends
+    g = Graph.Test.Fixtures.Parser.parse(@hamster_friends)
     assert 1_858 = Graph.num_vertices(g)
     assert 12_534 = Graph.num_edges(g)
     assert 20 = Graph.degeneracy(g)
   end
 
   defp build_basic_cyclic_graph do
-    Graph.new
+    Graph.new()
     |> Graph.add_vertex(:a)
     |> Graph.add_vertex(:b)
     |> Graph.add_vertex(:c)
@@ -381,7 +554,7 @@ defmodule GraphTest do
   end
 
   defp build_basic_cyclic_digraph do
-    dg = :digraph.new
+    dg = :digraph.new()
     :digraph.add_vertex(dg, :a)
     :digraph.add_vertex(dg, :b)
     :digraph.add_vertex(dg, :c)
@@ -398,7 +571,7 @@ defmodule GraphTest do
   end
 
   defp build_basic_acyclic_graph do
-    Graph.new
+    Graph.new()
     |> Graph.add_vertex(:a)
     |> Graph.add_vertex(:b)
     |> Graph.add_vertex(:c)
@@ -413,7 +586,7 @@ defmodule GraphTest do
   end
 
   defp build_basic_acyclic_digraph do
-    dg = :digraph.new
+    dg = :digraph.new()
     :digraph.add_vertex(dg, :a)
     :digraph.add_vertex(dg, :b)
     :digraph.add_vertex(dg, :c)
@@ -429,7 +602,7 @@ defmodule GraphTest do
   end
 
   defp build_basic_tree_graph do
-    Graph.new
+    Graph.new()
     |> Graph.add_vertex(:a)
     |> Graph.add_vertex(:b)
     |> Graph.add_vertex(:c)
@@ -442,7 +615,7 @@ defmodule GraphTest do
   end
 
   defp build_basic_tree_digraph do
-    dg = :digraph.new
+    dg = :digraph.new()
     :digraph.add_vertex(dg, :a)
     :digraph.add_vertex(dg, :b)
     :digraph.add_vertex(dg, :c)
@@ -474,8 +647,8 @@ defmodule GraphTest do
     |> Graph.add_edge(:d, :b, weight: 1)
   end
 
-  defp build_complex_graph() do
-    Graph.new
+  defp build_complex_graph(type \\ :directed) do
+    Graph.new(type: type)
     |> Graph.add_edge(42, 25, weight: 2525)
     |> Graph.add_edge(66, 67, weight: 2254)
     |> Graph.add_edge(71, 72, weight: 3895)
@@ -614,13 +787,12 @@ defmodule GraphTest do
     |> Graph.add_edge(97, 98, weight: 13465)
   end
 
-  defp build_complex_graph_float do
-    build_complex_graph()
-    |> Graph.edges
-    |> Enum.reduce(Graph.new(), fn %Graph.Edge{weight: weight} = edge, acc ->
+  defp build_complex_graph_float(type \\ :directed) do
+    build_complex_graph(type)
+    |> Graph.edges()
+    |> Enum.reduce(Graph.new(type: type), fn %Graph.Edge{weight: weight} = edge, acc ->
       acc
-      |> Graph.add_edge(%Graph.Edge{ edge | weight: weight / 1000 })
+      |> Graph.add_edge(%Graph.Edge{edge | weight: weight / 1000})
     end)
   end
-
 end
