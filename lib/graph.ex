@@ -2173,7 +2173,7 @@ defmodule Graph do
 
     Enum.reduce(allowed, Graph.new(type: type), fn v_id, sg ->
       v = Map.get(vertices, v_id)
-      
+
       sg =
         sg
         |> Graph.add_vertex(v)
