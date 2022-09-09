@@ -289,6 +289,12 @@ defmodule GraphTest do
              ["start", "start_0", 95, 94, 93, 39, 38, 21, 69, 68, "end_0", "end"]
   end
 
+  test "shortest paths for complex graph using signed weights (negative and positive)" do
+    g = build_complex_signed_graph()
+    shortest_paths = Graph.bellman_ford(g, :a)
+    assert shortest_paths == %{97 => 0, 98 => -1, 99 => 2, 100 => -2, 101 => 1}
+  end
+
   test "edge undirected graph v1 > v2" do
     g = build_basic_undirected_graph()
     e1 = Graph.edge(g, :a, :b)
@@ -627,6 +633,18 @@ defmodule GraphTest do
     |> Graph.add_vertices([:a, :b, :c])
     |> Graph.add_edge(:a, :b)
     |> Graph.add_edge(:c, :b)
+  end
+
+  defp build_complex_signed_graph do
+    Graph.new
+    |> Graph.add_edge(:a, :b, weight: -1)
+    |> Graph.add_edge(:b, :e, weight: 2)
+    |> Graph.add_edge(:e, :d, weight: -3)
+    |> Graph.add_edge(:d, :c, weight: 5)
+    |> Graph.add_edge(:a, :c, weight: 4)
+    |> Graph.add_edge(:b, :c, weight: 3)
+    |> Graph.add_edge(:b, :d, weight: 2)
+    |> Graph.add_edge(:d, :b, weight: 1)
   end
 
   defp build_complex_graph(type \\ :directed) do

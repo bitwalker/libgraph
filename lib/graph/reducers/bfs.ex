@@ -50,16 +50,23 @@ defmodule Graph.Reducers.Bfs do
       ...> #{__MODULE__}.reduce(g, [], fn 4, acc -> {:halt, acc}; v, acc -> {:next, [v|acc]} end)
       [3, 1]
   """
-  def reduce(%Graph{vertices: vs, in_edges: ie} = g, acc, fun) when is_function(fun, 2) do
+  def reduce(%Graph{vertices: vs} = g, acc, fun) when is_function(fun, 2) do
     vs
     # Start with a cost of zero
     |> Stream.map(fn {id, _} -> {id, 0} end)
     # Only populate the initial queue with those vertices which have no inbound edges
-    |> Stream.filter(fn {id, _cost} -> is_nil(Map.get(ie, id)) end)
+    |> Stream.reject(fn {id, _cost} -> inbound_edges?(g, id) end)
     |> Enum.reduce(PriorityQueue.new(), fn {id, cost}, q ->
       PriorityQueue.push(q, id, cost)
     end)
     |> traverse(g, MapSet.new(), fun, acc)
+  end
+
+  defp inbound_edges?(%Graph{in_edges: ie}, v_id) do
+    case Map.get(ie, v_id) do
+      nil -> false
+      edges -> MapSet.size(edges) > 0
+    end
   end
 
   defp traverse(q, %Graph{out_edges: oe, vertices: vertices} = g, visited, fun, acc) do
