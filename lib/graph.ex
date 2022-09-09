@@ -149,6 +149,38 @@ defmodule Graph do
     Graph.Serializers.DOT.serialize(g)
   end
 
+  @doc """
+  Converts the given Graph to DOT format, saves it under filename, and
+  compiles the file to png.
+
+  For more information see the to_dot function.
+
+  ## Example
+
+      > g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      > g = Graph.add_edges([{:a, :b}, {:b, :c}, {:b, :d}, {:c, :d}])
+      > g = Graph.label_vertex(g, :a, :start)
+      > g = Graph.label_vertex(g, :d, :finish)
+      > g = Graph.update_edge(g, :b, :d, weight: 3)
+      > IO.puts(Graph.to_png(g, "./test"))
+
+  Now you find two files, test.dot with the graphviz content and
+  test.png with the compiled image of the graph.
+  """
+  @spec to_png(t, String.t) :: {:ok, binary} | {:error, term}
+  def to_png(%__MODULE__{} = g, filename, format \\ :png) do
+    case Graph.Serializers.DOT.serialize(g) do
+      {:ok, ser} ->
+        File.write(filename <> ".dot", ser)
+        {res, 0} = System.cmd("dot", [
+              "-T", "#{format}", filename <> ".dot",
+              "-o", filename <> ".#{format}"
+            ])
+        {:ok, res}
+      {err, msg} -> {err, msg}
+    end
+  end
+
   @spec to_edgelist(t) :: {:ok, binary} | {:error, term}
   def to_edgelist(%__MODULE__{} = g) do
     Graph.Serializers.Edgelist.serialize(g)
