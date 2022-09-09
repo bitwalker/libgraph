@@ -18,6 +18,28 @@ defmodule Graph.Reducer.Test do
     assert ^expected = Graph.Reducers.Dfs.map(g, fn v -> v end)
   end
 
+  test "depth-first (preorder) with edge {:b, :a}" do
+    g = Graph.new
+    |> Graph.add_vertices([:b, :a])
+    |> Graph.add_edge(:b, :a)
+
+    expected = [:b, :a]
+    assert ^expected = Graph.Reducers.Dfs.map(g, fn v -> v end)
+    # NB the same applies to the preorder function
+    # assert ^expected = Graph.preorder(g)
+  end
+
+  test "first node of depth-first (preorder) with edge {1, 8000}" do
+    g = Graph.new
+    |> Graph.add_vertices([1, 8000])
+    |> Graph.add_edge(1, 8000)
+
+    expected = [1, 8000]
+    assert ^expected = Graph.Reducers.Dfs.map(g, fn v -> v end)
+    # NB the same applies to the preorder function
+    # assert ^expected = Graph.preorder(g)
+  end
+
   test "can walk a graph breadth-first" do
     g =
       Graph.new()
