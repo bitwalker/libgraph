@@ -1458,7 +1458,7 @@ defmodule Graph do
       ...> Graph.topsort(g)
       false
   """
-  @spec topsort(t) :: [vertex]
+  @spec topsort(t) :: [vertex] | false
   def topsort(%__MODULE__{type: :undirected}), do: false
   def topsort(%__MODULE__{} = g), do: Graph.Directed.topsort(g)
 
