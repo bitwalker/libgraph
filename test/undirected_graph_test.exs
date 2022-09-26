@@ -1,7 +1,5 @@
-defmodule GraphTest do
+defmodule Graph.UndirectedTest do
   use ExUnit.Case, async: true
-  alias Graph.Edge
-  alias Graph.Test.Generators
 
   describe "Graph.reachable/2" do
     test "reachable" do
