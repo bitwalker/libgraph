@@ -1,6 +1,6 @@
 defmodule Graph.Undirected do
   @moduledoc false
-  @compile {:inline, [in_neighbors: 2, in_neighbors: 3, out_neighbors: 2, out_neighbors: 3]}
+  @compile {:inline, [neighbors: 2, neighbors: 3]}
 
   def reachable(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
@@ -15,47 +15,37 @@ defmodule Graph.Undirected do
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
 
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)),
+    for id <- :lists.append(forest(g, &neighbors/3, vs, :not_first)),
         do: Map.get(vertices, id)
   end
 
   def neighbors(%Graph{} = g, v, []) do
-    out_neighbors(g, v) ++ in_neighbors(g, v)
+    neighbors(g, v)
   end
 
-  def in_neighbors(%Graph{} = g, v, []) do
-    in_neighbors(g, v)
-  end
-
-  def in_neighbors(%Graph{in_edges: ie}, v, vs) do
+  def neighbors(%Graph{out_edges: oe, in_edges: ie}, v, vs) do
     case Map.get(ie, v) do
-      nil -> vs
-      v_in -> MapSet.to_list(v_in) ++ vs
+      nil ->
+        case Map.get(oe, v) do
+          nil -> vs
+          v_out -> MapSet.to_list(v_out) ++ vs
+        end
+
+      v_in ->
+        MapSet.to_list(v_in) ++ vs
     end
   end
 
-  def in_neighbors(%Graph{in_edges: ie}, v) do
+  def neighbors(%Graph{out_edges: oe, in_edges: ie}, v) do
     case Map.get(ie, v) do
-      nil -> []
-      v_in -> MapSet.to_list(v_in)
-    end
-  end
+      nil ->
+        case Map.get(oe, v) do
+          nil -> []
+          v_out -> MapSet.to_list(v_out)
+        end
 
-  def out_neighbors(%Graph{} = g, v, []) do
-    in_neighbors(g, v)
-  end
-
-  def out_neighbors(%Graph{out_edges: oe}, v, vs) do
-    case Map.get(oe, v) do
-      nil -> vs
-      v_out -> MapSet.to_list(v_out) ++ vs
-    end
-  end
-
-  def out_neighbors(%Graph{out_edges: oe}, v) do
-    case Map.get(oe, v) do
-      nil -> []
-      v_out -> MapSet.to_list(v_out)
+      v_in ->
+        MapSet.to_list(v_in)
     end
   end
 
