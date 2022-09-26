@@ -1551,7 +1551,10 @@ defmodule Graph do
       [:d, :c, :b]
   """
   @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
-  defdelegate reachable_neighbors(g, vs), to: Graph.Directed
+  def reachable_neighbors(%Graph{type: :undirected} = g, vs),
+    do: Graph.Undirected.reachable_neighbors(g, vs)
+
+  def reachable_neighbors(%Graph{} = g, vs), do: Graph.Directed.reachable_neighbors(g, vs)
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
