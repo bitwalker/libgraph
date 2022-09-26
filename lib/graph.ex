@@ -1534,7 +1534,8 @@ defmodule Graph do
       [:d, :c, :b, :a]
   """
   @spec reachable(t, [vertex]) :: [[vertex]]
-  defdelegate reachable(g, vs), to: Graph.Directed
+  def reachable(%Graph{type: :undirected} = g, vs), do: Graph.Undirected.reachable(g, vs)
+  def reachable(%Graph{} = g, vs), do: Graph.Directed.reachable(g, vs)
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
