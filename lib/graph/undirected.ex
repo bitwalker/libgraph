@@ -24,29 +24,28 @@ defmodule Graph.Undirected do
   end
 
   def neighbors(%Graph{out_edges: oe, in_edges: ie}, v, vs) do
-    case Map.get(ie, v) do
-      nil ->
-        case Map.get(oe, v) do
-          nil -> vs
-          v_out -> MapSet.to_list(v_out) ++ vs
-        end
+    case {Map.get(ie, v), Map.get(oe, v)} do
+      {nil, nil} ->
+        vs
 
-      v_in ->
+      {v_in, nil} ->
         MapSet.to_list(v_in) ++ vs
+
+      {nil, v_out} ->
+        MapSet.to_list(v_out) ++ vs
+
+      {v_in, v_out} ->
+        s = MapSet.union(v_in, v_out)
+        MapSet.to_list(s) ++ vs
     end
   end
 
   def neighbors(%Graph{out_edges: oe, in_edges: ie}, v) do
-    case Map.get(ie, v) do
-      nil ->
-        case Map.get(oe, v) do
-          nil -> []
-          v_out -> MapSet.to_list(v_out)
-        end
+    v_in = Map.get(ie, v, MapSet.new())
+    v_out = Map.get(oe, v, MapSet.new())
 
-      v_in ->
-        MapSet.to_list(v_in)
-    end
+    MapSet.union(v_in, v_out)
+    |> MapSet.to_list()
   end
 
   defp forest(%Graph{vertices: vs} = g, fun) do
