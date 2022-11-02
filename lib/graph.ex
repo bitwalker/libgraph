@@ -318,7 +318,7 @@ defmodule Graph do
       ...> Graph.dijkstra(g, :a, :d)
       nil
   """
-  @spec dijkstra(t, vertex, vertex) :: [vertex]
+  @spec dijkstra(t, vertex, vertex) :: [vertex] | nil
   defdelegate dijkstra(g, a, b), to: Graph.Pathfinding
 
   @doc """
