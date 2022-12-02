@@ -132,6 +132,13 @@ defmodule Graph do
   NOTE: Currently this function assumes graphs are directed graphs, but in the future
   it will support undirected graphs as well.
 
+  NOTE: Currently this function assumes graphs are directed graphs, but in the future
+  it will support undirected graphs as well.
+
+  NOTE 2: To avoid to overwrite vertices with the same label, output is 
+  generated using the internal numeric ID as vertex label.
+  Original label is expressed as `id[label="<label>"]`.
+
   ## Example
 
       > g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
@@ -139,16 +146,17 @@ defmodule Graph do
       > g = Graph.label_vertex(g, :a, :start)
       > g = Graph.label_vertex(g, :d, :finish)
       > g = Graph.update_edge(g, :b, :d, weight: 3)
-      > IO.puts(Graph.to_dot(g))
+      > {:ok, dot} = Graph.to_dot(g)
+      > IO.puts(dot)
       strict digraph {
-          start
-          b
-          c
-          finish
-          start -> b [weight=1]
-          b -> c [weight=1]
-          b -> finish [weight=3]
-          c -> finish [weight=1]
+          97[label="start"]
+          98[label="b"]
+          99[label="c"]
+          100[label="finish"]
+          97 -> 98 [weight=1]
+          98 -> 99 [weight=1]
+          98 -> 100 [weight=3]
+          99 -> 100 [weight=1]
       }
   """
   @spec to_dot(t) :: {:ok, binary} | {:error, term}
