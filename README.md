@@ -41,7 +41,7 @@ by adding `libgraph` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:libgraph, "~> 0.7"}]
+  [{:libgraph, "~> 0.16.0"}]
 end
 ```
 
