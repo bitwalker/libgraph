@@ -135,7 +135,7 @@ defmodule Graph do
   ## Example
 
       > g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
-      > g = Graph.add_edges([{:a, :b}, {:b, :c}, {:b, :d}, {:c, :d}])
+      > g = Graph.add_edges(g, [{:a, :b}, {:b, :c}, {:b, :d}, {:c, :d}])
       > g = Graph.label_vertex(g, :a, :start)
       > g = Graph.label_vertex(g, :d, :finish)
       > g = Graph.update_edge(g, :b, :d, weight: 3)
