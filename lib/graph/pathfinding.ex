@@ -103,7 +103,7 @@ defmodule Graph.Pathfinding do
   Finds all paths between `a` and `b`, each path as a list of vertices.
   Returns `nil` if no path can be found.
   """
-  @spec all(Graph.t(), Graph.vertex(), Graph.vertex()) :: [Graph.vertex()]
+  @spec all(Graph.t(), Graph.vertex(), Graph.vertex()) :: [[Graph.vertex()]] | nil
   def all(%Graph{vertices: vs, out_edges: oe, vertex_identifier: vertex_identifier} = g, a, b) do
     with a_id <- vertex_identifier.(a),
          b_id <- vertex_identifier.(b),
