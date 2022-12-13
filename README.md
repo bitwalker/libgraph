@@ -47,7 +47,7 @@ end
 
 ## Rationale
 
-The original motiviation for me to start working on this library is the fact that `:digraph` requires a
+The original motivation for me to start working on this library is the fact that `:digraph` requires a
 minimum of 3 ETS tables per graph, and up to 6 depending on the operations you are performing on the graph.
 If you are working with a lot of graphs concurrently, as I am, this means you can find yourself in a situation
 where you hit the system limit for the maximum number of ETS table, and bring your system down. Seeing as how
