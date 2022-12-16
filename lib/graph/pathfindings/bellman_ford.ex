@@ -11,7 +11,7 @@ defmodule Graph.Pathfindings.BellmanFord do
   @doc """
   Returns nil when graph has negative cycle.
   """
-  @spec bellman_ford(Graph.t(), Graph.vertex()) :: %{Graph.vertex() => integer() | :infinity} | nil
+  @spec call(Graph.t(), Graph.vertex()) :: %{Graph.vertex() => integer() | :infinity} | nil
   def call(%Graph{vertices: vs, edges: meta} = g, a) do
     distances = a |> Graph.Utils.vertex_id() |> init_distances(vs)
 
