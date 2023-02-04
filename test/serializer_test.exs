@@ -34,6 +34,28 @@ defmodule Graph.SerializerTests do
     assert actual == expected
   end
 
+  test "to_flowchart" do
+    g = kitchen_sink_graph()
+
+    {:ok, actual} = Graph.to_flowchart(g)
+
+    expected = """
+    ```mermaid
+    flowchart
+        97["start"]
+        98["{:complex, :label}"]
+        99["c"]
+        100["finish"]
+        97 ----> 98
+        98 --> |5| 99
+        98 ----> |1.0| 100
+        99 --> 100
+    ```
+    """
+
+    assert actual == expected
+  end
+
   defp kitchen_sink_graph do
     Graph.new()
     |> Graph.add_vertices([:a, :b, :c, :d])

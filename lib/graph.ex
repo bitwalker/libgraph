@@ -161,6 +161,11 @@ defmodule Graph do
     Graph.Serializers.Edgelist.serialize(g)
   end
 
+  @spec to_flowchart(t) :: {:ok, binary} | {:error, term}
+  def to_flowchart(%__MODULE__{} = g) do
+    Graph.Serializers.Flowchart.serialize(g)
+  end
+
   @doc """
   Returns the number of edges in the graph.
 
