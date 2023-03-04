@@ -40,7 +40,6 @@ defmodule Graph.SerializerTests do
     {:ok, actual} = Graph.to_flowchart(g)
 
     expected = """
-    ```mermaid
     flowchart
         97["start"]
         98["{:complex, :label}"]
@@ -50,7 +49,6 @@ defmodule Graph.SerializerTests do
         98 --> |5| 99
         98 ----> |1.0| 100
         99 --> 100
-    ```
     """
 
     assert actual == expected

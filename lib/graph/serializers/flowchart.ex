@@ -9,11 +9,9 @@ defmodule Graph.Serializers.Flowchart do
   @impl Graph.Serializer
   def serialize(%Graph{} = g) do
     result = """
-    ```mermaid
     flowchart
     #{serialize_vertices(g)}
     #{serialize_edges(g)}
-    ```
     """
 
     {:ok, result}
