@@ -292,7 +292,7 @@ defmodule GraphTest do
   test "shortest paths for complex graph using signed weights (negative and positive)" do
     g = build_complex_signed_graph()
     shortest_paths = Graph.bellman_ford(g, :a)
-    assert shortest_paths == %{97 => 0, 98 => -1, 99 => 2, 100 => -2, 101 => 1}
+    assert shortest_paths == %{a: 0, b: -1, c: 2, d: -2, e: 1}
   end
 
   test "edge undirected graph v1 > v2" do

@@ -333,7 +333,7 @@ defmodule Graph do
       ...>   {:b, :c, weight: -2}, {:a, :b, weight: 1},
       ...>   {:c, :d, weight: 3}, {:b, :d, weight: 4}])
       ...> Graph.bellman_ford(g, :a)
-      %{97 => 0, 98 => 1, 99 => -1, 100 => 2}
+      %{a: 0, b: 1, c: -1, d: 2}
 
       iex> g = Graph.new |> Graph.add_edges([
       ...>   {:b, :c, weight: -2}, {:a, :b, weight: -1},
