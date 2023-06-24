@@ -537,6 +537,11 @@ defmodule GraphTest do
     assert 20 = Graph.degeneracy(g)
   end
 
+  test "leaf_vertices/1" do
+    g = build_basic_acyclic_graph()
+    assert [:e] = Graph.leaf_vertices(g)
+  end
+
   defp build_basic_cyclic_graph do
     Graph.new()
     |> Graph.add_vertex(:a)

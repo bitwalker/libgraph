@@ -69,6 +69,17 @@ defmodule Graph.Directed do
       true
   end
 
+  def leaf_vertices(%Graph{in_edges: ie, out_edges: oe} = g) do
+    Enum.reduce(ie, [], fn {v_id, _}, acc ->
+      if Map.has_key?(oe, v_id) do
+        acc
+      else
+        vertex = Map.get(g.vertices, v_id)
+        [vertex | acc]
+      end
+    end)
+  end
+
   def loop_vertices(%Graph{vertices: vs} = g) do
     for {v_id, v} <- vs, is_reflexive_vertex(g, v_id), do: v
   end

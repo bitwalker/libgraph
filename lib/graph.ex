@@ -604,6 +604,8 @@ defmodule Graph do
     Map.values(vs)
   end
 
+  defdelegate leaf_vertices(g), to: Graph.Directed
+
   @doc """
   Returns true if the given vertex exists in the graph. Otherwise false.
 
