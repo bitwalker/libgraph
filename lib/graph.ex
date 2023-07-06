@@ -604,7 +604,27 @@ defmodule Graph do
     Map.values(vs)
   end
 
-  defdelegate leaf_vertices(g), to: Graph.Directed
+  @doc """
+  Returns a list of all vertices that have no outgoing edges.
+
+  NOTE: This function is only supported for directed graphs, and
+  will return `{:error, :unsupported}` for undirected graphs.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> Graph.leaf_vertices(g)
+      [:c]
+
+  """
+  @spec leaf_vertices(t) :: [vertex]
+  def leaf_vertices(%Graph{type: :undirected}) do
+    raise ArgumentError, "leaf_vertices/1 is not supported for undirected graphs"
+  end
+
+  def leaf_vertices(%Graph{type: :directed} = g) do
+    Graph.Directed.leaf_vertices(g)
+  end
 
   @doc """
   Returns true if the given vertex exists in the graph. Otherwise false.

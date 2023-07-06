@@ -69,12 +69,11 @@ defmodule Graph.Directed do
       true
   end
 
-  def leaf_vertices(%Graph{in_edges: ie, out_edges: oe} = g) do
-    Enum.reduce(ie, [], fn {v_id, _}, acc ->
+  def leaf_vertices(%Graph{out_edges: oe, vertices: vc}) do
+    Enum.reduce(vc, [], fn {v_id, vertex}, acc ->
       if Map.has_key?(oe, v_id) do
         acc
       else
-        vertex = Map.get(g.vertices, v_id)
         [vertex | acc]
       end
     end)
