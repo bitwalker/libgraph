@@ -135,7 +135,7 @@ defmodule Graph do
   NOTE: Currently this function assumes graphs are directed graphs, but in the future
   it will support undirected graphs as well.
 
-  NOTE 2: To avoid to overwrite vertices with the same label, output is 
+  NOTE 2: To avoid to overwrite vertices with the same label, output is
   generated using the internal numeric ID as vertex label.
   Original label is expressed as `id[label="<label>"]`.
 
@@ -1493,6 +1493,40 @@ defmodule Graph do
   @spec topsort(t) :: [vertex] | false
   def topsort(%__MODULE__{type: :undirected}), do: false
   def topsort(%__MODULE__{} = g), do: Graph.Directed.topsort(g)
+
+  @doc """
+  Returns a batch topological ordering of the vertices of graph `g`, if such an ordering exists, otherwise it
+  returns false. For each vertex in the returned list, no out-neighbors occur earlier in the list. This differs
+  from `topsort/1` in that this function returns a list of lists where each sublist can be concurrently evaluated
+  without worrying about elements in the sublist depending on eachother.
+
+  Multiple edges between two vertices are considered a single edge for purposes of this sort.
+
+  ## Example
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}])
+      ...> Graph.batch_topsort(g)
+      [[:a], [:b, :c]]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}])
+      ...> Graph.batch_topsort(g)
+      [[:a], [:b], [:c], [:d]]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d, :x, :y, :z])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:c, :d}, {:x, :y}, {:x, :z}])
+      ...> Graph.batch_topsort(g)
+      [[:a, :x], [:b, :c, :y, :z], [:d]]
+
+      iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d, :x, :y, :z])
+      ...> g = Graph.add_edges(g, [{:a, :b}, {:a, :c}, {:b, :c}, {:c, :d}, {:c, :a}])
+      ...> Graph.batch_topsort(g)
+      false
+  """
+  @spec batch_topsort(t) :: [vertex] | false
+  def batch_topsort(%__MODULE__{type: :undirected}), do: false
+  def batch_topsort(%__MODULE__{} = g), do: Graph.Directed.batch_topsort(g)
 
   @doc """
   Returns a list of connected components, where each component is a list of vertices.

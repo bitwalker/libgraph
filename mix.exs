@@ -52,7 +52,8 @@ defmodule Graph.Mixfile do
       {:stream_data, "~> 0.5", only: [:test]},
       {:excoveralls, "~> 0.7", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: :dev}
+      {:ex_doc, ">= 0.0.0", only: :dev},
+      {:ssl_verify_fun, "~> 1.1", manager: :rebar3, only: [:test], override: true}
     ]
   end
 
