@@ -2,6 +2,42 @@ defmodule Graph.Directed do
   @moduledoc false
   @compile {:inline, [in_neighbors: 2, in_neighbors: 3, out_neighbors: 2, out_neighbors: 3]}
 
+  def batch_topsort(%Graph{} = g) do
+    if is_acyclic?(g) do
+      g
+      |> topsort()
+      |> do_batch_topsort([], g)
+    else
+      false
+    end
+  end
+
+  defp do_batch_topsort([], acc, %Graph{}) do
+    acc
+  end
+
+  defp do_batch_topsort([next_vertex | rest_verticies], [], %Graph{} = g) do
+    do_batch_topsort(rest_verticies, [[next_vertex]], g)
+  end
+
+  defp do_batch_topsort([next_vertex | rest_verticies], acc, %Graph{} = g) do
+    batch_index =
+      Enum.find_index(acc, fn vertex_batch ->
+        Enum.all?(vertex_batch, fn check_vertex ->
+          Graph.dijkstra(g, check_vertex, next_vertex) == nil
+        end)
+      end)
+
+    updated_acc =
+      if not is_nil(batch_index) do
+        List.update_at(acc, batch_index, fn vertex_batch -> [next_vertex | vertex_batch] end)
+      else
+        List.insert_at(acc, -1, [next_vertex])
+      end
+
+    do_batch_topsort(rest_verticies, updated_acc, g)
+  end
+
   def topsort(%Graph{vertices: vs} = g) do
     l = reverse_postorder(g)
 
