@@ -681,7 +681,7 @@ defmodule Graph do
         v,
         labels
       )
-      when is_list(labels) do
+      when is_struct(g) and is_list(labels) do
     id = vertex_identifier.(v)
 
     case Map.get(vs, id) do
@@ -693,7 +693,7 @@ defmodule Graph do
     end
   end
 
-  def add_vertex(g, v, label) do
+  def add_vertex(g, v, label) when is_struct(g) do
     add_vertex(g, v, [label])
   end
 

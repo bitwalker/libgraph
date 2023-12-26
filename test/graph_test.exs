@@ -5,6 +5,12 @@ defmodule GraphTest do
   alias Graph.Edge
   alias Graph.Test.Generators
 
+  test "add_vertex does not allow nil" do
+    assert_raise FunctionClauseError, fn ->
+      Graph.add_vertex(nil, "A")
+    end
+  end
+
   test "injectable vertex_identifier" do
     g = Graph.new()
 
