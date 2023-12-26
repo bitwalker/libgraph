@@ -30,7 +30,7 @@ addition, over time I'm adding new functions to query the graph in ways not prev
 and introducing support for classifying a graph as undirected if so desired, so that queries over such graphs
 become easier.
 
-If you are interested in reading more about how you can make use of `libgraph`, 
+If you are interested in reading more about how you can make use of `libgraph`,
 there is an [excellent blog post](https://medium.com/@tonyhammond/native-graph-data-in-elixir-8c0bb325d451) written by Tony Hammond
 which is a very helpful walkthrough of the library and what can be built with it.
 
@@ -41,7 +41,7 @@ by adding `libgraph` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:libgraph, "~> 0.7"}]
+  [{:libgraph, "0.14.0"}]
 end
 ```
 
@@ -74,7 +74,7 @@ Additionally, I also had a few other things I wanted to address:
 - `:digraph` graphs are not "inspect-friendly", you get a tuple with the underlying ETS table ids, but that's it,
   not necessarily a big deal, but it's nice for playing around in the shell if you can see how your code affects the
   structure.
-  
+
 My speculation as to why `:digraph` is the way it is, is that when `:digraph` was originally written, there was
 no efficient key/value datastructure in Erlang that could support large numbers of keys. At that time, maps
 weren't even a speck in the eye of the language maintainers. Even after the initial introduction of maps in OTP 18,
