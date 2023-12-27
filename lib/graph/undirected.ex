@@ -7,6 +7,17 @@ defmodule Graph.Undirected do
     for id <- :lists.append(forest(g, &neighbors/3, vs, :first)), do: Map.get(vertices, id)
   end
 
+  def reachable_neighbors(
+        %Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g,
+        vs
+      )
+      when is_list(vs) do
+    vs = Enum.map(vs, vertex_identifier)
+
+    for id <- :lists.append(forest(g, &neighbors/3, vs, :not_first)),
+        do: Map.get(vertices, id)
+  end
+
   def neighbors(%Graph{} = g, v, []) do
     neighbors(g, v)
   end

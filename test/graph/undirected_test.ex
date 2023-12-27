@@ -35,4 +35,39 @@ defmodule Graph.UndirectedTest do
       assert [nil] = Graph.reachable(g, [:a])
     end
   end
+
+  describe "Graph.reachable_neighbours/2" do
+    test "reachable" do
+      g =
+        Graph.new(type: :undirected)
+        |> Graph.add_edges([{:a, :b}, {:b, :c}])
+
+      assert [:a, :b] = Graph.reachable_neighbors(g, [:c])
+    end
+
+    @tag :only
+    test "parts reachable" do
+      g =
+        Graph.new(type: :undirected)
+        |> Graph.add_edges([{:a, :b}, {:b, :c}, {:d, :e}, {:e, :f}])
+
+      assert [:d, :e] = Graph.reachable_neighbors(g, [:f])
+      assert [] = Graph.reachable_neighbors(g, [:b])
+    end
+
+    test "nothing reachable" do
+      g =
+        Graph.new(type: :undirected)
+        |> Graph.add_edges([{:a, :b}, {:b, :d}])
+        |> Graph.add_vertex(:c)
+
+      assert [] = Graph.reachable_neighbors(g, [:c])
+    end
+
+    test "unknown vertex" do
+      g = Graph.new(type: :undirected)
+
+      assert [] = Graph.reachable_neighbors(g, [:a])
+    end
+  end
 end
