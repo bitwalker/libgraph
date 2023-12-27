@@ -135,7 +135,7 @@ defmodule Graph do
   NOTE: Currently this function assumes graphs are directed graphs, but in the future
   it will support undirected graphs as well.
 
-  NOTE 2: To avoid to overwrite vertices with the same label, output is 
+  NOTE 2: To avoid to overwrite vertices with the same label, output is
   generated using the internal numeric ID as vertex label.
   Original label is expressed as `id[label="<label>"]`.
 
