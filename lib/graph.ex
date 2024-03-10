@@ -1581,7 +1581,7 @@ defmodule Graph do
       [:d, :c, :b, :a]
   """
   @spec reachable(t, [vertex]) :: [[vertex]]
-  defdelegate reachable(g, vs), to: Graph.Directed
+  defdelegate reachable(g, vs), to: Graph.Common
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
@@ -1597,7 +1597,7 @@ defmodule Graph do
       [:d, :c, :b]
   """
   @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
-  defdelegate reachable_neighbors(g, vs), to: Graph.Directed
+  defdelegate reachable_neighbors(g, vs), to: Graph.Common
 
   @doc """
   Returns an unsorted list of vertices from the graph, such that for each vertex in the list (call it `v`),
