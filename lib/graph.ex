@@ -693,7 +693,7 @@ defmodule Graph do
     end
   end
 
-  def add_vertex(g, v, label) do
+  def add_vertex(%__MODULE__{} = g, v, label) when not is_list(label) do
     add_vertex(g, v, [label])
   end
 
