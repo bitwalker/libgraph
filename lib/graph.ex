@@ -69,7 +69,10 @@ defmodule Graph do
 
   - `type: :directed | :undirected`, specifies what type of graph this is. Defaults to a `:directed` graph.
   - `vertex_identifier`: a function which accepts a vertex and returns a unique identifier of said vertex.
-    Defaults to `Graph.Utils.vertex_id/1`, a hash of the whole vertex utilizing `:erlang.phash2/2`.
+    Defaults to `Graph.Utils.vertex_id/1`, a hash of the whole vertex utilizing `:erlang.phash2/2`. For graphs
+    with large numbers of vertices (more than ~10_000) collisions become more likely with `:erlang.phash2/2`
+    which can lead to some vertices not being added as expected due to duplicate vertex id's. Consider using
+    a different hash function in those cases.
 
   ## Example
 
