@@ -1118,6 +1118,62 @@ defmodule Graph do
   end
 
   @doc """
+  Like `split_edge/4`, but requires you to specify the labelled edge to split.
+
+  ## Example
+      iex> g = Graph.new |> Graph.add_vertices([:a, :c]) |> Graph.add_edge(:a, :c, label: :first_label, weight: 2) |> Graph.add_edge(:a, :c, label: :second_label, weight: 2)
+      iex> g = Graph.split_labelled_edge(g, :a, :c, :b, :first_label)
+      iex> Graph.edges(g)
+      [%Graph.Edge{v1: :a, v2: :b, label: :first_label, weight: 2}, %Graph.Edge{v1: :a, v2: :c, label: :second_label, weight: 2}, %Graph.Edge{v1: :b, v2: :c, label: :first_label, weight: 2}]
+      iex> Graph.split_labelled_edge(g, :a, :c, :b, :unknown_label)
+      {:error, :no_such_edge}
+  """
+  @spec split_labelled_edge(t, vertex, vertex, vertex, label) :: t | {:error, :no_such_edge}
+  def split_labelled_edge(%__MODULE__{type: :undirected} = g, v1, v2, v3, label) do
+    if v1 > v2 do
+      do_split_labelled_edge(g, v2, v1, v3, label)
+    else
+      do_split_labelled_edge(g, v1, v2, v3, label)
+    end
+  end
+
+  def split_labelled_edge(%__MODULE__{} = g, v1, v2, v3, label) do
+    do_split_labelled_edge(g, v1, v2, v3, label)
+  end
+
+  defp do_split_labelled_edge(
+         %__MODULE__{out_edges: oe, edges: em, vertex_identifier: vertex_identifier} =
+           g,
+         v1,
+         v2,
+         v3,
+         label
+       ) do
+    with v1_id <- vertex_identifier.(v1),
+         v2_id <- vertex_identifier.(v2),
+         {:ok, v1_out} <- Map.fetch(oe, v1_id),
+         true <- MapSet.member?(v1_out, v2_id),
+         meta <- Map.get(em, {v1_id, v2_id}),
+         true <- Enum.any?(meta, fn {edge_label, _} -> edge_label == label end) do
+
+      g = add_vertex(g, v3)
+
+      Enum.reduce(meta, g, fn {edge_label, weight}, acc ->
+        if edge_label == label do
+          acc
+          |> add_edge(v1, v3, label: label, weight: weight)
+          |> add_edge(v3, v2, label: label, weight: weight)
+          |> delete_edge(v1, v2, label)
+        else
+          acc
+        end
+      end)
+    else
+      _ -> {:error, :no_such_edge}
+    end
+  end
+
+  @doc """
   Given two vertices, this function updates the metadata (weight/label) for the unlabelled
   edge between those two vertices. If no unlabelled edge exists between them, an error
   tuple is returned. If you set a label, the unlabelled edge will be replaced with a new labelled
