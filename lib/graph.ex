@@ -2216,6 +2216,51 @@ defmodule Graph do
   end
 
   @doc """
+  Merges two graphs into a single graph, combining all vertices and edges from both.
+
+  When the same edge (same vertex pair and label) exists in both graphs, the weight from
+  the second graph is used. Likewise, vertex labels from the second graph take precedence
+  for shared vertices. Both graphs must be of the same type (`:directed` or `:undirected`),
+  otherwise an `ArgumentError` is raised.
+
+  ## Example
+
+      iex> g1 = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      ...> g2 = Graph.new |> Graph.add_edges([{:b, :d}, {:d, :e}])
+      ...> g = Graph.merge(g1, g2)
+      ...> {length(Graph.vertices(g)), length(Graph.edges(g))}
+      {5, 4}
+  """
+  @spec merge(t, t) :: t | no_return
+  def merge(
+        %__MODULE__{type: type} = g1,
+        %__MODULE__{type: type} = g2
+      ) do
+    %__MODULE__{
+      g1
+      | vertices: Map.merge(g1.vertices, g2.vertices),
+        vertex_labels: Map.merge(g1.vertex_labels, g2.vertex_labels),
+        edges:
+          Map.merge(g1.edges, g2.edges, fn _key, meta1, meta2 ->
+            Map.merge(meta1, meta2)
+          end),
+        out_edges:
+          Map.merge(g1.out_edges, g2.out_edges, fn _key, set1, set2 ->
+            MapSet.union(set1, set2)
+          end),
+        in_edges:
+          Map.merge(g1.in_edges, g2.in_edges, fn _key, set1, set2 ->
+            MapSet.union(set1, set2)
+          end)
+    }
+  end
+
+  def merge(%__MODULE__{type: type1}, %__MODULE__{type: type2}) do
+    raise ArgumentError,
+          "cannot merge graphs of different types: #{inspect(type1)} and #{inspect(type2)}"
+  end
+
+  @doc """
   Builds a maximal subgraph of `g` which includes all of the vertices in `vs` and the edges which connect them.
 
   See the test suite for example usage.

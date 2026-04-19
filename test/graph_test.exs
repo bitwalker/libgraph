@@ -795,4 +795,196 @@ defmodule GraphTest do
       |> Graph.add_edge(%Graph.Edge{edge | weight: weight / 1000})
     end)
   end
+
+  describe "merge/2" do
+    test "merges disjoint directed graphs" do
+      g1 = Graph.new() |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      g2 = Graph.new() |> Graph.add_edges([{:d, :e}, {:e, :f}])
+      g = Graph.merge(g1, g2)
+
+      assert length(Graph.vertices(g)) == 6
+      assert length(Graph.edges(g)) == 4
+      assert Graph.has_vertex?(g, :a)
+      assert Graph.has_vertex?(g, :f)
+    end
+
+    test "merges overlapping directed graphs" do
+      g1 = Graph.new() |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      g2 = Graph.new() |> Graph.add_edges([{:b, :c}, {:c, :d}])
+      g = Graph.merge(g1, g2)
+
+      assert length(Graph.vertices(g)) == 4
+      assert length(Graph.edges(g)) == 3
+    end
+
+    test "preserves edge labels and weights" do
+      g1 = Graph.new() |> Graph.add_edge(:a, :b, label: :uses, weight: 2)
+      g2 = Graph.new() |> Graph.add_edge(:a, :b, label: :contains, weight: 3)
+      g = Graph.merge(g1, g2)
+
+      edges = Graph.edges(g, :a, :b)
+      assert length(edges) == 2
+      labels = Enum.map(edges, & &1.label) |> Enum.sort()
+      assert labels == [:contains, :uses]
+    end
+
+    test "g2 edge weight takes precedence for same label" do
+      g1 = Graph.new() |> Graph.add_edge(:a, :b, label: :cost, weight: 5)
+      g2 = Graph.new() |> Graph.add_edge(:a, :b, label: :cost, weight: 10)
+      g = Graph.merge(g1, g2)
+
+      [edge] = Graph.edges(g, :a, :b)
+      assert edge.weight == 10
+    end
+
+    test "merges vertex labels, g2 takes precedence" do
+      g1 = Graph.new() |> Graph.add_vertex(:a, :label1)
+      g2 = Graph.new() |> Graph.add_vertex(:a, :label2)
+      g = Graph.merge(g1, g2)
+
+      assert Graph.vertex_labels(g, :a) == [:label2]
+    end
+
+    test "preserves vertex labels from both graphs" do
+      g1 = Graph.new() |> Graph.add_vertex(:a, :label1)
+      g2 = Graph.new() |> Graph.add_vertex(:b, :label2)
+      g = Graph.merge(g1, g2)
+
+      assert Graph.vertex_labels(g, :a) == [:label1]
+      assert Graph.vertex_labels(g, :b) == [:label2]
+    end
+
+    test "merges undirected graphs" do
+      g1 = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b)
+      g2 = Graph.new(type: :undirected) |> Graph.add_edge(:b, :c)
+      g = Graph.merge(g1, g2)
+
+      assert g.type == :undirected
+      assert length(Graph.vertices(g)) == 3
+      assert length(Graph.edges(g)) == 2
+    end
+
+    test "raises on type mismatch" do
+      g1 = Graph.new(type: :directed)
+      g2 = Graph.new(type: :undirected)
+
+      assert_raise ArgumentError, ~r/cannot merge graphs of different types/, fn ->
+        Graph.merge(g1, g2)
+      end
+    end
+
+    test "merging with empty graph returns equivalent graph" do
+      g = Graph.new() |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      empty = Graph.new()
+
+      merged1 = Graph.merge(g, empty)
+      merged2 = Graph.merge(empty, g)
+
+      assert Graph.vertices(merged1) |> Enum.sort() == Graph.vertices(g) |> Enum.sort()
+      assert Graph.vertices(merged2) |> Enum.sort() == Graph.vertices(g) |> Enum.sort()
+      assert length(Graph.edges(merged1)) == length(Graph.edges(g))
+      assert length(Graph.edges(merged2)) == length(Graph.edges(g))
+    end
+
+    test "preserves multi-edges between same vertex pair" do
+      g1 = Graph.new() |> Graph.add_edge(:a, :b, label: :foo)
+      g2 = Graph.new() |> Graph.add_edge(:a, :b, label: :bar)
+      g = Graph.merge(g1, g2)
+
+      edges = Graph.edges(g, :a, :b)
+      assert length(edges) == 2
+    end
+
+    test "merged graph supports traversal" do
+      g1 = Graph.new() |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      g2 = Graph.new() |> Graph.add_edges([{:c, :d}, {:d, :e}])
+      g = Graph.merge(g1, g2)
+
+      assert Graph.dijkstra(g, :a, :e) == [:a, :b, :c, :d, :e]
+    end
+
+    test "merged graph supports topological sort" do
+      g1 = Graph.new() |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      g2 = Graph.new() |> Graph.add_edges([{:c, :d}])
+      g = Graph.merge(g1, g2)
+
+      sorted = Graph.topsort(g)
+      assert sorted == [:a, :b, :c, :d]
+    end
+
+    test "uses vertex_identifier from g1" do
+      custom_id = fn v -> :erlang.phash2(v, 65536) end
+      g1 = Graph.new(vertex_identifier: custom_id) |> Graph.add_vertex(:a)
+      g2 = Graph.new(vertex_identifier: custom_id) |> Graph.add_vertex(:b)
+      g = Graph.merge(g1, g2)
+
+      assert g.vertex_identifier == custom_id
+      assert Graph.has_vertex?(g, :a)
+      assert Graph.has_vertex?(g, :b)
+    end
+
+    test "in_edges and out_edges are correct after merge" do
+      g1 = Graph.new() |> Graph.add_edges([{:a, :b}])
+      g2 = Graph.new() |> Graph.add_edges([{:c, :b}])
+      g = Graph.merge(g1, g2)
+
+      assert Enum.sort(Graph.in_neighbors(g, :b)) == [:a, :c]
+      assert Graph.out_neighbors(g, :a) == [:b]
+      assert Graph.out_neighbors(g, :c) == [:b]
+    end
+
+    test "self-loops are preserved" do
+      g1 = Graph.new() |> Graph.add_edge(:a, :a)
+      g2 = Graph.new() |> Graph.add_edge(:b, :b)
+      g = Graph.merge(g1, g2)
+
+      assert length(Graph.edges(g)) == 2
+      assert Graph.edge(g, :a, :a) != nil
+      assert Graph.edge(g, :b, :b) != nil
+    end
+
+    test "preserves isolated vertices" do
+      g1 = Graph.new() |> Graph.add_vertices([:a, :b]) |> Graph.add_edge(:a, :b)
+      g2 = Graph.new() |> Graph.add_vertex(:z)
+      g = Graph.merge(g1, g2)
+
+      assert length(Graph.vertices(g)) == 3
+      assert Graph.has_vertex?(g, :z)
+      assert Graph.out_neighbors(g, :z) == []
+      assert Graph.in_neighbors(g, :z) == []
+    end
+
+    test "merging graphs with shared vertex but different edges" do
+      g1 = Graph.new() |> Graph.add_edge(:a, :b)
+      g2 = Graph.new() |> Graph.add_edge(:a, :c)
+      g = Graph.merge(g1, g2)
+
+      assert Enum.sort(Graph.out_neighbors(g, :a)) == [:b, :c]
+    end
+
+    test "undirected merge with overlapping edges preserves weight from g2" do
+      g1 = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b, weight: 1)
+      g2 = Graph.new(type: :undirected) |> Graph.add_edge(:b, :a, weight: 5)
+      g = Graph.merge(g1, g2)
+
+      [edge] = Graph.edges(g, :a, :b)
+      assert edge.weight == 5
+    end
+
+    test "both inputs are subgraphs of the result" do
+      g1 = Graph.new() |> Graph.add_edges([{:a, :b}, {:b, :c}])
+      g2 = Graph.new() |> Graph.add_edges([{:c, :d}])
+      g = Graph.merge(g1, g2)
+
+      assert Graph.is_subgraph?(g1, g)
+      assert Graph.is_subgraph?(g2, g)
+    end
+
+    test "merging two empty graphs" do
+      g = Graph.merge(Graph.new(), Graph.new())
+
+      assert Graph.vertices(g) == []
+      assert Graph.edges(g) == []
+    end
+  end
 end
