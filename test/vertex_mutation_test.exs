@@ -1,6 +1,20 @@
 defmodule Graph.VertexMutationTest do
   use ExUnit.Case, async: true
 
+  test "replacing an undirected vertex reorients its incident edges" do
+    g =
+      Graph.new(type: :undirected)
+      |> Graph.add_edges([{:a, :b, label: :x}, {:a, :a, label: :loop}, {:b, :c}])
+      |> Graph.label_vertex(:a, :label)
+      |> Graph.replace_vertex(:a, :z)
+
+    assert Graph.edge(g, :b, :z, :x) == Graph.Edge.new(:b, :z, label: :x)
+    assert Graph.edge(g, :z, :z, :loop) == Graph.Edge.new(:z, :z, label: :loop)
+    assert Graph.vertex_labels(g, :z) == [:label]
+    refute Graph.has_vertex?(g, :a)
+    assert Graph.replace_vertex(g, :missing, :new) == {:error, :no_such_vertex}
+  end
+
   test "deleting an integer ID preserves distinct float ID edges" do
     g =
       Graph.new(vertex_identifier: fn v -> v end)

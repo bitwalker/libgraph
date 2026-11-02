@@ -801,11 +801,40 @@ defmodule Graph do
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
   def replace_vertex(
-        %__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertex_identifier: vertex_identifier} =
-          g,
+        %__MODULE__{vertices: vertices, vertex_identifier: identifier} = g,
         v,
         rv
       ) do
+    id = identifier.(v)
+    replacement_id = identifier.(rv)
+
+    cond do
+      not Map.has_key?(vertices, id) ->
+        {:error, :no_such_vertex}
+
+      Map.has_key?(vertices, replacement_id) ->
+        # Preserve the existing behavior when replacement coalesces two vertices.
+        replace_existing_vertex(g, v, rv)
+
+      true ->
+        incident =
+          Enum.map(edges(g, v), fn %Edge{} = edge ->
+            v1 = if identifier.(edge.v1) === id, do: rv, else: edge.v1
+            v2 = if identifier.(edge.v2) === id, do: rv, else: edge.v2
+            %Edge{edge | v1: v1, v2: v2}
+          end)
+
+        labels = vertex_labels(g, v)
+        g |> delete_vertex(v) |> add_vertex(rv, labels) |> add_edges(incident)
+    end
+  end
+
+  defp replace_existing_vertex(
+         %__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertex_identifier: vertex_identifier} =
+           g,
+         v,
+         rv
+       ) do
     vs = g.vertices
     labels = g.vertex_labels
 
