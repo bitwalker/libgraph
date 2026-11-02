@@ -13,7 +13,7 @@ defmodule Graph.Pathfindings.BellmanFord do
   """
   @spec call(Graph.t(), Graph.vertex()) :: %{Graph.vertex() => integer() | :infinity} | nil
   def call(%Graph{vertices: vs, edges: meta} = g, a) do
-    distances = a |> Graph.Utils.vertex_id() |> init_distances(vs)
+    distances = a |> g.vertex_identifier.() |> init_distances(vs)
 
     weights = Enum.map(meta, &edge_weight/1)
 
@@ -34,7 +34,7 @@ defmodule Graph.Pathfindings.BellmanFord do
   @spec init_distances(Graph.vertex(), Graph.vertices()) :: distance
   defp init_distances(vertex_id, vertices) do
     Map.new(vertices, fn
-      {id, _vertex} when id == vertex_id -> {id, 0}
+      {id, _vertex} when id === vertex_id -> {id, 0}
       {id, _} -> {id, :infinity}
     end)
   end
