@@ -463,8 +463,9 @@ defmodule Graph do
     v_out = Map.get(oe, v_id) || MapSet.new()
     v_all = MapSet.union(v_in, v_out)
 
+    # Self-loops are emitted by the outgoing pass below.
     e_in =
-      Enum.flat_map(v_all, fn v2_id ->
+      Enum.flat_map(MapSet.delete(v_all, v_id), fn v2_id ->
         case Map.get(meta, {v2_id, v_id}) do
           nil ->
             []
