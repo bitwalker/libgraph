@@ -90,6 +90,14 @@ defmodule GraphTest do
     assert "#Graph<type: directed, num_vertices: 151, num_edges: 150>" = str
   end
 
+  test "inspect ordering is independent of internal vertex identifiers" do
+    edges = for v <- 1..40, label <- [nil, :tag], do: {v, v + 1, label: label}
+    first = Graph.new(vertex_identifier: fn v -> v end) |> Graph.add_edges(edges)
+    second = Graph.new(vertex_identifier: fn v -> -v end) |> Graph.add_edges(edges)
+
+    assert inspect(first, limit: :infinity) == inspect(second, limit: :infinity)
+  end
+
   test "get info about graph" do
     g = build_basic_cyclic_graph()
     assert %{type: :directed, num_vertices: 5, num_edges: 7} = Graph.info(g)
@@ -636,7 +644,7 @@ defmodule GraphTest do
   end
 
   defp build_complex_signed_graph do
-    Graph.new
+    Graph.new()
     |> Graph.add_edge(:a, :b, weight: -1)
     |> Graph.add_edge(:b, :e, weight: 2)
     |> Graph.add_edge(:e, :d, weight: -3)

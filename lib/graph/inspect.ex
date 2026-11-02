@@ -9,7 +9,7 @@ defimpl Inspect, for: Graph do
     # and convert the map of edges to their reified forms (i.e. the actual vertex term is used in place of ids)
     # we also want to respect the inspect options as much as possible, so we do this all the hard way by
     # constructing the inspect algebra by hand
-    vs_doc = Inspect.Algebra.to_doc(Map.values(vs), opts)
+    vs_doc = Inspect.Algebra.to_doc(Enum.sort(Map.values(vs)), opts)
 
     doc =
       Inspect.Algebra.concat([
@@ -24,14 +24,21 @@ defimpl Inspect, for: Graph do
       ])
 
     doc =
-      Stream.flat_map(es, fn {v_id, out_neighbors} ->
+      es
+      |> Enum.sort_by(fn {v_id, _} -> Map.fetch!(vs, v_id) end)
+      |> Stream.flat_map(fn {v_id, out_neighbors} ->
         v = Inspect.Algebra.to_doc(Map.get(vs, v_id), opts)
 
-        Enum.flat_map(out_neighbors, fn out_id ->
+        out_neighbors
+        |> Enum.sort_by(&Map.fetch!(vs, &1))
+        |> Enum.flat_map(fn out_id ->
           out_v = Map.get(vs, out_id)
           out_v_doc = Inspect.Algebra.to_doc(out_v, opts)
 
-          Enum.map(Map.fetch!(meta, {v_id, out_id}), fn
+          meta
+          |> Map.fetch!({v_id, out_id})
+          |> Enum.sort()
+          |> Enum.map(fn
             {nil, _} when type == :directed ->
               [v, " -> ", out_v_doc]
 

@@ -503,12 +503,12 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b, label: :uses)
       ...> g = Graph.add_edge(g, :a, :b, label: :contains)
-      ...> Graph.edges(g, :a, :b)
+      ...> Graph.edges(g, :a, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
 
       iex> g = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b, label: :uses)
       ...> g = Graph.add_edge(g, :a, :b, label: :contains)
-      ...> Graph.edges(g, :a, :b)
+      ...> Graph.edges(g, :a, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
   """
   @spec edges(t, vertex, vertex) :: [Edge.t()]
@@ -1029,7 +1029,7 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:a, :b, label: :foo, weight: 2}])
-      ...> Graph.edges(g)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
 
       iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
@@ -1127,7 +1127,7 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
       ...> %Graph{} = g = Graph.update_edge(g, :a, :b, weight: 2, label: :foo)
-      ...> Graph.edges(g)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :bar}, %Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
   """
   @spec update_edge(t, vertex, vertex, Edge.edge_opts()) :: t | {:error, :no_such_edge}
@@ -1144,12 +1144,12 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
       ...> %Graph{} = g = Graph.update_labelled_edge(g, :a, :b, :bar, weight: 2, label: :foo)
-      ...> Graph.edges(g)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
 
       iex> g = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
       ...> %Graph{} = g = Graph.update_labelled_edge(g, :a, :b, :bar, weight: 2, label: :foo)
-      ...> Graph.edges(g)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec update_labelled_edge(t, vertex, vertex, label, Edge.edge_opts()) ::
@@ -2116,7 +2116,7 @@ defmodule Graph do
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
-      ...> Graph.in_edges(g, :b)
+      ...> Graph.in_edges(g, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec in_edges(t, vertex) :: Edge.t()
@@ -2183,7 +2183,7 @@ defmodule Graph do
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
-      ...> Graph.out_edges(g, :a)
+      ...> Graph.out_edges(g, :a) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec out_edges(t, vertex) :: Edge.t()
