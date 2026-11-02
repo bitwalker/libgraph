@@ -6,10 +6,16 @@ defmodule Graph.UtilsTest do
   end
 
   test "sizeof/1" do
-    assert 64 = sizeof({1, :foo, "bar"})
-    assert 440 = sizeof(String.duplicate("bar", 128))
-    assert 8 = sizeof([])
-    assert 24 = sizeof([1 | 2])
-    assert 56 = sizeof([1, 2, 3])
+    wordsize = :erlang.system_info(:wordsize)
+    assert sizeof({1, :foo, "bar"}) == 8 * wordsize
+    assert sizeof([]) == wordsize
+    assert sizeof([1 | 2]) == 3 * wordsize
+    assert sizeof([1, 2, 3]) == 7 * wordsize
+
+    binary = String.duplicate("bar", 128)
+    larger_binary = String.duplicate("bar", 256)
+    assert sizeof(binary) > byte_size(binary)
+    assert sizeof(larger_binary) - sizeof(binary) == byte_size(binary)
+    assert sizeof({binary}) > sizeof(binary)
   end
 end
