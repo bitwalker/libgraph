@@ -80,6 +80,19 @@ defmodule Graph.VertexIdentityTest do
     end
   end
 
+  test "core decomposition peels distinct numeric neighbors independently" do
+    for {left, right} <- numeric_pairs() do
+      g =
+        graph()
+        |> Graph.add_edges([{left, right}, {right, :a}, {:a, :b}, {:b, :c}, {:c, :a}])
+
+      assert Graph.coreness(g, left) == 1
+      assert Graph.coreness(g, right) == 1
+      assert Graph.coreness(g, :a) == 2
+      assert Graph.k_core_components(g)[1] |> MapSet.new() == MapSet.new([left, right])
+    end
+  end
+
   defp graph, do: Graph.new(type: :undirected, vertex_identifier: fn v -> v end)
 
   defp numeric_pairs do

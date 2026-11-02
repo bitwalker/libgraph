@@ -1935,7 +1935,7 @@ defmodule Graph do
               :ets.delete(degrees, v)
 
               for neighbor <- out_neighbors(g, v),
-                  not :ets.member(l, neighbor) and v != neighbor do
+                  not :ets.member(l, neighbor) and v !== neighbor do
                 :ets.update_counter(degrees, neighbor, {2, -1})
               end
 
