@@ -349,7 +349,7 @@ defmodule Graph do
       ...> Graph.bellman_ford(g, :a)
       nil
   """
-  @spec bellman_ford(t, vertex) :: [vertex]
+  @spec bellman_ford(t, vertex) :: %{vertex => number | :infinity} | nil
   defdelegate bellman_ford(g, a), to: Graph.Pathfinding
 
   @doc """
@@ -375,7 +375,7 @@ defmodule Graph do
       ...> Graph.a_star(g, :a, :d, fn _ -> 0 end)
       nil
   """
-  @spec a_star(t, vertex, vertex, (vertex, vertex -> integer)) :: [vertex]
+  @spec a_star(t, vertex, vertex, (vertex -> number)) :: [vertex] | nil
   defdelegate a_star(g, a, b, hfun), to: Graph.Pathfinding
 
   @doc """
@@ -612,7 +612,7 @@ defmodule Graph do
       ...> Graph.vertices(g)
       [:a, :b]
   """
-  @spec vertices(t) :: vertex
+  @spec vertices(t) :: [vertex]
   def vertices(%__MODULE__{vertices: vs}) do
     Map.values(vs)
   end
@@ -1580,7 +1580,7 @@ defmodule Graph do
       ...> Graph.reachable(g, [:a])
       [:d, :c, :b, :a]
   """
-  @spec reachable(t, [vertex]) :: [[vertex]]
+  @spec reachable(t, [vertex]) :: [vertex]
   defdelegate reachable(g, vs), to: Graph.Directed
 
   @doc """
@@ -1596,7 +1596,7 @@ defmodule Graph do
       ...> Graph.reachable_neighbors(g, [:a])
       [:d, :c, :b]
   """
-  @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
+  @spec reachable_neighbors(t, [vertex]) :: [vertex]
   defdelegate reachable_neighbors(g, vs), to: Graph.Directed
 
   @doc """
@@ -1612,7 +1612,7 @@ defmodule Graph do
       ...> Graph.reaching(g, [:d])
       [:b, :a, :c, :d]
   """
-  @spec reaching(t, [vertex]) :: [[vertex]]
+  @spec reaching(t, [vertex]) :: [vertex]
   defdelegate reaching(g, vs), to: Graph.Directed
 
   @doc """
@@ -1628,7 +1628,7 @@ defmodule Graph do
       ...> Graph.reaching_neighbors(g, [:b])
       [:b, :c, :a]
   """
-  @spec reaching_neighbors(t, [vertex]) :: [[vertex]]
+  @spec reaching_neighbors(t, [vertex]) :: [vertex]
   defdelegate reaching_neighbors(g, vs), to: Graph.Directed
 
   @doc """
@@ -2119,7 +2119,7 @@ defmodule Graph do
       ...> Graph.in_edges(g, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
-  @spec in_edges(t, vertex) :: Edge.t()
+  @spec in_edges(t, vertex) :: [Edge.t()]
   def in_edges(%__MODULE__{type: :undirected} = g, v) do
     edges(g, v)
   end
@@ -2186,7 +2186,7 @@ defmodule Graph do
       ...> Graph.out_edges(g, :a) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
-  @spec out_edges(t, vertex) :: Edge.t()
+  @spec out_edges(t, vertex) :: [Edge.t()]
   def out_edges(%__MODULE__{type: :undirected} = g, v) do
     edges(g, v)
   end
