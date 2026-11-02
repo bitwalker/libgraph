@@ -4,7 +4,7 @@ defmodule Graph.Mixfile do
   def project do
     [
       app: :libgraph,
-      version: "0.16.0",
+      version: "0.17.0",
       elixir: "~> 1.10",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -12,7 +12,12 @@ defmodule Graph.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       description: "A high-performance graph datastructure library for Elixir projects",
       package: package(),
-      aliases: aliases(),
+      aliases: aliases()
+    ]
+  end
+
+  def cli do
+    [
       preferred_cli_env: [
         docs: :dev,
         bench: :bench
@@ -45,7 +50,7 @@ defmodule Graph.Mixfile do
       {:benchee, "~> 1.0", only: [:bench]},
       {:stream_data, "~> 0.5", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.28.5", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.28", only: :dev, runtime: false}
     ]
   end
 
