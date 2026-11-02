@@ -12,15 +12,9 @@ defmodule Graph.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       description: "A high-performance graph datastructure library for Elixir projects",
       package: package(),
-      test_coverage: [tool: ExCoveralls],
       aliases: aliases(),
       preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.html": :test,
-        "coveralls.json": :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        docs: :docs,
+        docs: :dev,
         bench: :bench
       ]
     ]
@@ -50,10 +44,8 @@ defmodule Graph.Mixfile do
     [
       {:benchee, "~> 1.0", only: [:bench]},
       {:stream_data, "~> 0.5", only: [:test]},
-      {:excoveralls, "~> 0.7", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: :dev},
-      {:ssl_verify_fun, "~> 1.1", manager: :rebar3, only: [:test], override: true}
+      {:ex_doc, "~> 0.28.5", only: :dev, runtime: false}
     ]
   end
 

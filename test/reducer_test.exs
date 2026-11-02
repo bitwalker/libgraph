@@ -35,17 +35,19 @@ defmodule Graph.Reducer.Test do
   end
 
   test "can walk a graph breadth-first, when the starting points had their in-edges deleted" do
-    g = Graph.new
-    |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g])
-    |> Graph.add_edge(:a, :b)
-    |> Graph.add_edge(:a, :d)
-    |> Graph.add_edge(:b, :c)
-    |> Graph.add_edge(:b, :d)
-    |> Graph.add_edge(:c, :e)
-    |> Graph.add_edge(:d, :f)
-    |> Graph.add_edge(:f, :g)
-    |> Graph.add_edge(:b, :a) # Add this edge and then remove it
-    |> Graph.delete_edge(:b, :a)
+    g =
+      Graph.new()
+      |> Graph.add_vertices([:a, :b, :c, :d, :e, :f, :g])
+      |> Graph.add_edge(:a, :b)
+      |> Graph.add_edge(:a, :d)
+      |> Graph.add_edge(:b, :c)
+      |> Graph.add_edge(:b, :d)
+      |> Graph.add_edge(:c, :e)
+      |> Graph.add_edge(:d, :f)
+      |> Graph.add_edge(:f, :g)
+      # Add this edge and then remove it
+      |> Graph.add_edge(:b, :a)
+      |> Graph.delete_edge(:b, :a)
 
     expected = [:a, :b, :d, :c, :f, :e, :g]
     assert ^expected = Graph.Reducers.Bfs.map(g, fn v -> v end)

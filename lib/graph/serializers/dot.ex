@@ -14,7 +14,9 @@ defmodule Graph.Serializers.DOT do
 
   defp serialize_nodes(%Graph{vertices: vertices} = g) do
     Enum.reduce(vertices, "", fn {id, v}, acc ->
-      acc <> Serializer.indent(1) <> "#{id}" <> "[label=" <> Serializer.get_vertex_label(g, id, v) <> "]\n"
+      acc <>
+        Serializer.indent(1) <>
+        "#{id}" <> "[label=" <> Serializer.get_vertex_label(g, id, v) <> "]\n"
     end)
   end
 

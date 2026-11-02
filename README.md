@@ -1,8 +1,7 @@
 # libgraph
 
-[![Master](https://travis-ci.org/bitwalker/libgraph.svg?branch=master)](https://travis-ci.org/bitwalker/libgraph)
+[![Main](https://github.com/bitwalker/libgraph/actions/workflows/elixir.yml/badge.svg?branch=main)](https://github.com/bitwalker/libgraph/actions/workflows/elixir.yml)
 [![Hex.pm Version](http://img.shields.io/hexpm/v/libgraph.svg?style=flat)](https://hex.pm/packages/libgraph)
-[![Coverage Status](https://coveralls.io/repos/github/bitwalker/libgraph/badge.svg?branch=master)](https://coveralls.io/github/bitwalker/libgraph?branch=master)
 
 [Documentation](https://hexdocs.pm/libgraph)
 
@@ -24,7 +23,7 @@ approach that feels good on that front.
 - A `Serializer` behaviour, for defining custom serialization of graphs, with a Graphviz DOT format serializer
   provided out of the box.
 
-It is backed by a large suite of tests, including several QuickCheck properties for the graph model. Its
+It is backed by a large suite of tests, including StreamData properties for the graph model. Its
 API shares some similarity with `:digraph`, but diverges in favor of a more idiomatic Elixir interface. In
 addition, over time I'm adding new functions to query the graph in ways not previously supported via `:digraph`,
 and introducing support for classifying a graph as undirected if so desired, so that queries over such graphs
@@ -97,7 +96,29 @@ considers lower integer values higher priority, which is perfect for the kinds o
 
 ## Contributing
 
-To run the test suite you will need to run `mix eqc.install --mini` once you've cloned the repo and fetched dependencies.
+The library supports Elixir 1.10 and later. CI checks the 1.10/OTP 23 floor in a digest-pinned container and representative Elixir/OTP pairs through the current release. Runtime versions and image digests are recorded in `.github/workflows/elixir.yml`.
+
+Use [mise](https://mise.jdx.dev/) to select a compatible local pair. For the canonical development checks:
+
+```sh
+mise exec erlang@27.3.4.19 elixir@1.18.4-otp-27 -- mix local.hex --force
+mise exec erlang@27.3.4.19 elixir@1.18.4-otp-27 -- mix deps.get --check-locked
+mise exec erlang@27.3.4.19 elixir@1.18.4-otp-27 -- mix test
+```
+
+Tests include StreamData properties; no proprietary QuickCheck installation is needed. Run `mix test --cover` for built-in coverage. On the canonical toolchain, also run `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix dialyzer`, `mix docs`, and `mix hex.build --unpack`. Generated packages are for local inspection; publishing remains a manual maintainer action.
+
+Workflow changes must pass actionlint, zizmor, and action-lock verification. Actions use full commit SHAs with version comments, and `.github/workflows/actions.lock` locks their provenance and transitive dependencies. After reviewing an action update, run:
+
+```sh
+gh extension install github/gh-actions-lock --pin v0.4.0
+gh actions-lock --no-narrow
+gh actions-lock --verify --no-narrow
+actionlint
+zizmor .github
+```
+
+Review the workflow and generated lockfile together; do not edit the lockfile by hand. Dependabot proposes weekly action updates after a seven-day cooldown. Runtime/tool downloads and Docker images are outside action locking; pin images by digest and verify directly downloaded legacy tooling. CI runs fork PRs with read-only permissions and no publication credentials.
 
 If you have changes in mind that are significant or potentially time consuming, please open a RFC-style PR first, where we
 can discuss your plans first. I don't want you to spend all your time crafting a PR that I ultimately reject because I don't
