@@ -44,6 +44,31 @@ def deps do
 end
 ```
 
+## Vertex identity
+
+By default, libgraph identifies vertices using a 32-bit hash. Hash collisions can
+silently treat distinct vertices as one, including their incident edges. To identify
+vertices by their exact values instead:
+
+```elixir
+graph = Graph.new(vertex_identifier: fn vertex -> vertex end)
+```
+
+For structured vertices, you can instead supply a stable unique application ID,
+such as `fn %{id: id} -> id end`. Identifiers are exact map keys: `1` and `1.0`
+remain distinct. Adding a value with an existing identifier keeps the first stored
+vertex and its labels. Subgraphs and extracted cores preserve the callback.
+
+Undirected edges order their endpoints by vertex value, so use consistent vertex
+values for each logical identifier when adding and querying edges. DOT and Mermaid
+serializers currently use identifiers directly as node names; tuple or map IDs
+require a custom serializer or serialization-friendly IDs.
+
+Compare build time, lookup time, retained vertex counts, and worker memory after GC for
+hashed and identity keys with `mix run bench/vertex_identity.exs`. The benchmark
+includes reused and reconstructed structured endpoints; workload-specific sharing
+can materially affect memory use. See `Graph.new/1` for the identifier contract.
+
 ## Rationale
 
 The original motivation for me to start working on this library is the fact that `:digraph` requires a

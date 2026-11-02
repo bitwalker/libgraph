@@ -36,7 +36,8 @@ defmodule Graph do
   alias Graph.{Edge, EdgeSpecificationError}
 
   @typedoc """
-  Identifier of a vertex. By default a non_neg_integer from `:erlang.phash2/2` utilizing `:erlang.phash2`.
+  Identifier of a vertex. Defaults to a 32-bit hash from `:erlang.phash2/2`,
+  which is not guaranteed to be unique. See `new/1` for identifier options.
   """
   @type vertex_id :: non_neg_integer() | term()
   @type vertex :: term
@@ -69,7 +70,25 @@ defmodule Graph do
 
   - `type: :directed | :undirected`, specifies what type of graph this is. Defaults to a `:directed` graph.
   - `vertex_identifier`: a function which accepts a vertex and returns a unique identifier of said vertex.
-    Defaults to `:erlang.phash2/2`, a hash of the whole vertex utilizing `:erlang.phash2/2`.
+    Defaults to a 32-bit `:erlang.phash2/2` hash of the whole vertex.
+
+  ## Vertex identity
+
+  Identifiers are map keys and use exact term equality: `1` and `1.0` are distinct
+  identifiers. The function must return a stable identifier for each logical vertex.
+  Values with the same identifier refer to the same vertex; adding another value
+  with an existing identifier retains the first stored vertex and its labels.
+
+  The default hash can collide, causing distinct vertices to be treated as one and
+  their edges to share endpoints. For collision-free identity by vertex value, use
+  `Graph.new(vertex_identifier: fn vertex -> vertex end)`. For structured vertices,
+  a stable unique application ID can keep identifier keys small. Subgraphs retain
+  the original identifier function.
+
+  For undirected graphs, use consistent vertex values for each logical identifier
+  when adding and querying edges: endpoint ordering uses vertex values. DOT and
+  Mermaid serializers currently interpolate identifiers directly into node names;
+  tuple or map identifiers need a custom serializer or serialization-friendly IDs.
 
   ## Example
 
@@ -87,6 +106,11 @@ defmodule Graph do
       iex> g = Graph.new(vertex_identifier: fn v -> :erlang.phash2(v) end) |> Graph.add_edges([{:a, :b}, {:b, :a}])
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :a}]
+
+      iex> g = Graph.new(vertex_identifier: fn vertex -> vertex end)
+      ...> g = Graph.add_vertices(g, [33_702, 44_741])
+      ...> Graph.num_vertices(g)
+      2
   """
   def new(opts \\ []) do
     type = Keyword.get(opts, :type) || :directed
