@@ -2229,6 +2229,8 @@ defmodule Graph do
   @doc """
   Builds a maximal subgraph of `g` which includes all of the vertices in `vs` and the edges which connect them.
 
+  The subgraph retains the original graph's type and vertex identifier function.
+
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
@@ -2248,7 +2250,8 @@ defmodule Graph do
       |> Enum.filter(&Map.has_key?(vertices, &1))
       |> MapSet.new()
 
-    Enum.reduce(allowed, Graph.new(type: type), fn v_id, sg ->
+    Enum.reduce(allowed, Graph.new(type: type, vertex_identifier: vertex_identifier), fn v_id,
+                                                                                         sg ->
       v = Map.get(vertices, v_id)
 
       sg =
