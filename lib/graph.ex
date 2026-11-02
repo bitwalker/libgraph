@@ -36,7 +36,7 @@ defmodule Graph do
   alias Graph.{Edge, EdgeSpecificationError}
 
   @typedoc """
-  Identifier of a vertex. By default a non_neg_integer from `Graph.Utils.vertex_id/1` utilizing `:erlang.phash2`.
+  Identifier of a vertex. By default a non_neg_integer from `:erlang.phash2/2` utilizing `:erlang.phash2`.
   """
   @type vertex_id :: non_neg_integer() | term()
   @type vertex :: term
@@ -69,7 +69,7 @@ defmodule Graph do
 
   - `type: :directed | :undirected`, specifies what type of graph this is. Defaults to a `:directed` graph.
   - `vertex_identifier`: a function which accepts a vertex and returns a unique identifier of said vertex.
-    Defaults to `Graph.Utils.vertex_id/1`, a hash of the whole vertex utilizing `:erlang.phash2/2`.
+    Defaults to `:erlang.phash2/2`, a hash of the whole vertex utilizing `:erlang.phash2/2`.
 
   ## Example
 
@@ -1685,9 +1685,9 @@ defmodule Graph do
   Our example code constructs a graph which looks like so:
 
            :a
-             \
+             \\
               :b
-             /  \
+             /  \\
            :c   :d
            /
          :e
@@ -1711,9 +1711,9 @@ defmodule Graph do
   Our example code constructs a graph which looks like so:
 
           :a
-            \
+            \\
              :b
-            /  \
+            /  \\
            :c   :d
           /
          :e
