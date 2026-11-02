@@ -10,7 +10,7 @@ defmodule PriorityQueue.Test do
       end)
 
     str = "#{inspect(pq)}"
-    assert "#PriorityQueue<size: 5, queue: 'abcde'>" = str
+    assert str == "#PriorityQueue<size: 5, queue: #{inspect(Enum.to_list(?a..?e))}>"
   end
 
   test "can enqueue random elements and pull them out in priority order" do
