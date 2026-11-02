@@ -1126,7 +1126,8 @@ defmodule Graph do
       g = %__MODULE__{
         g
         | in_edges: Map.put(ie, v2_id, v2_in),
-          out_edges: Map.put(oe, v1_id, v1_out)
+          out_edges: Map.put(oe, v1_id, v1_out),
+          edges: Map.delete(em, {v1_id, v2_id})
       }
 
       g = add_vertex(g, v3)
