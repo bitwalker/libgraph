@@ -685,8 +685,8 @@ defmodule Graph do
       when is_list(labels) do
     id = vertex_identifier.(v)
 
-    case Map.get(vs, id) do
-      nil ->
+    case Map.fetch(vs, id) do
+      :error ->
         %__MODULE__{g | vertices: Map.put(vs, id, v), vertex_labels: Map.put(vl, id, labels)}
 
       _ ->
