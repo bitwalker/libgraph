@@ -357,7 +357,7 @@ defmodule GraphTest do
       |> Graph.add_vertices([:a, :b, :c, :d, :e, :f])
       |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:d, :e}, {:e, :a}, {:e, :b}, {:d, :f}])
 
-    cliques = Graph.cliques(g)
+    cliques = Graph.cliques(g) |> Enum.map(&Enum.sort/1) |> Enum.sort()
     assert [[:a, :b, :e], [:b, :c], [:c, :d], [:d, :e], [:d, :f]] = cliques
   end
 
@@ -478,7 +478,9 @@ defmodule GraphTest do
         {:f, :h}
       ])
 
-    components = Graph.k_core_components(g)
+    components =
+      Map.new(Graph.k_core_components(g), fn {k, vertices} -> {k, Enum.sort(vertices)} end)
+
     assert [:i] = components[0]
     assert [:e, :f, :g, :h] = components[1]
     assert is_nil(components[2])
