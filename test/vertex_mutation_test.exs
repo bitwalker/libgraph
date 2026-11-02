@@ -1,6 +1,18 @@
 defmodule Graph.VertexMutationTest do
   use ExUnit.Case, async: true
 
+  test "coalescing vertices preserves indexes for both incident neighborhoods" do
+    g =
+      Graph.new()
+      |> Graph.add_edges([{:a, :c}, {:b, :d}])
+      |> Graph.replace_vertex(:a, :b)
+
+    assert Enum.sort(Graph.out_neighbors(g, :b)) == [:c, :d]
+    result = g |> Graph.delete_vertex(:b) |> Graph.delete_vertex(:c)
+    assert Graph.edges(result) == []
+    assert Graph.vertices(result) == [:d]
+  end
+
   test "replacing an undirected vertex reorients its incident edges" do
     g =
       Graph.new(type: :undirected)

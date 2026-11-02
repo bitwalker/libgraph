@@ -842,38 +842,6 @@ defmodule Graph do
          true <- Map.has_key?(vs, v_id),
          rv_id <- vertex_identifier.(rv),
          vs <- Map.put(Map.delete(vs, v_id), rv_id, rv) do
-      oe =
-        for {from_id, to} = e <- oe, into: %{} do
-          fid = if from_id == v_id, do: rv_id, else: from_id
-
-          cond do
-            MapSet.member?(to, v_id) ->
-              {fid, MapSet.put(MapSet.delete(to, v_id), rv_id)}
-
-            from_id != fid ->
-              {fid, to}
-
-            :else ->
-              e
-          end
-        end
-
-      ie =
-        for {to_id, from} = e <- ie, into: %{} do
-          tid = if to_id == v_id, do: rv_id, else: to_id
-
-          cond do
-            MapSet.member?(from, v_id) ->
-              {tid, MapSet.put(MapSet.delete(from, v_id), rv_id)}
-
-            to_id != tid ->
-              {tid, from}
-
-            :else ->
-              e
-          end
-        end
-
       meta =
         em
         |> Stream.map(fn
@@ -883,6 +851,17 @@ defmodule Graph do
           edge -> edge
         end)
         |> Enum.into(%{})
+
+      # Coalescing may combine two adjacency entries. Rebuild from the retained
+      # edge metadata so neither neighborhood is lost to duplicate map keys.
+      oe = Map.new(oe, fn {id, _} -> {if(id === v_id, do: rv_id, else: id), MapSet.new()} end)
+      ie = Map.new(ie, fn {id, _} -> {if(id === v_id, do: rv_id, else: id), MapSet.new()} end)
+
+      {oe, ie} =
+        Enum.reduce(meta, {oe, ie}, fn {{from, to}, _}, {oe, ie} ->
+          {Map.update(oe, from, MapSet.new([to]), &MapSet.put(&1, to)),
+           Map.update(ie, to, MapSet.new([from]), &MapSet.put(&1, from))}
+        end)
 
       labels =
         case Map.get(labels, v_id) do
