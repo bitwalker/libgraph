@@ -898,15 +898,30 @@ defmodule Graph do
     ls = g.vertex_labels
 
     with v_id <- vertex_identifier.(v),
-         true <- Map.has_key?(vs, v_id),
-         oe <- Map.delete(oe, v_id),
-         ie <- Map.delete(ie, v_id),
-         vs <- Map.delete(vs, v_id),
-         ls <- Map.delete(ls, v_id) do
-      oe = for {id, ns} <- oe, do: {id, MapSet.delete(ns, v_id)}, into: %{}
-      ie = for {id, ns} <- ie, do: {id, MapSet.delete(ns, v_id)}, into: %{}
-      em = for {{id1, id2}, _} = e <- em, v_id != id1 && v_id != id2, do: e, into: %{}
-      %__MODULE__{g | vertices: vs, vertex_labels: ls, out_edges: oe, in_edges: ie, edges: em}
+         true <- Map.has_key?(vs, v_id) do
+      {outs, oe} = Map.pop(oe, v_id, MapSet.new())
+      {ins, ie} = Map.pop(ie, v_id, MapSet.new())
+
+      {ie, em} =
+        Enum.reduce(outs, {ie, em}, fn id, {ie, em} ->
+          ie = if id === v_id, do: ie, else: Map.update!(ie, id, &MapSet.delete(&1, v_id))
+          {ie, Map.delete(em, {v_id, id})}
+        end)
+
+      {oe, em} =
+        Enum.reduce(ins, {oe, em}, fn id, {oe, em} ->
+          oe = if id === v_id, do: oe, else: Map.update!(oe, id, &MapSet.delete(&1, v_id))
+          {oe, Map.delete(em, {id, v_id})}
+        end)
+
+      %__MODULE__{
+        g
+        | vertices: Map.delete(vs, v_id),
+          vertex_labels: Map.delete(ls, v_id),
+          out_edges: oe,
+          in_edges: ie,
+          edges: em
+      }
     else
       _ -> g
     end
