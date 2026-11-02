@@ -6,7 +6,8 @@ defmodule Graph.Pathfinding do
 
   @type heuristic_fun :: (Graph.vertex() -> integer)
 
-  @spec bellman_ford(Graph.t, Graph.vertex) :: %{Graph.vertex() => integer() | :infinity} | nil
+  @spec bellman_ford(Graph.t(), Graph.vertex()) ::
+          %{Graph.vertex() => integer() | :infinity} | nil
   def bellman_ford(g, a), do: Graph.Pathfindings.BellmanFord.call(g, a)
 
   @doc """
@@ -47,7 +48,7 @@ defmodule Graph.Pathfinding do
     with a_id <- vertex_identifier.(a),
          b_id <- vertex_identifier.(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
-      tree = Graph.new(vertex_identifier: vertex_identifier) |> Graph.add_vertex(a_id)
+      tree = %{a_id => a_id}
       q = PriorityQueue.new()
 
       q =
@@ -80,7 +81,7 @@ defmodule Graph.Pathfinding do
     a_id = vertex_identifier.(a)
     b_id = vertex_identifier.(b)
     a_all_edges = all_edges(g, a_id)
-    tree = Graph.new(vertex_identifier: vertex_identifier) |> Graph.add_vertex(a_id)
+    tree = %{a_id => a_id}
     q = PriorityQueue.new()
 
     q =
@@ -135,20 +136,17 @@ defmodule Graph.Pathfinding do
 
   defp do_bfs(
          q,
-         %Graph{type: :directed, out_edges: oe, vertex_identifier: vertex_identifier} = g,
+         %Graph{type: :directed, out_edges: oe} = g,
          target_id,
-         %Graph{vertices: vs_tree} = tree,
+         tree,
          hfun
        ) do
     case PriorityQueue.pop(q) do
       {{:value, {v_id, ^target_id, _}}, _q1} ->
-        v_id_tree = vertex_identifier.(v_id)
-        construct_path(v_id_tree, tree, [target_id])
+        construct_path(v_id, tree, [target_id])
 
       {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
-        v2_id_tree = vertex_identifier.(v2_id)
-
-        if Map.has_key?(vs_tree, v2_id_tree) do
+        if Map.has_key?(tree, v2_id) do
           do_bfs(q1, g, target_id, tree, hfun)
         else
           case Map.get(oe, v2_id) do
@@ -156,10 +154,7 @@ defmodule Graph.Pathfinding do
               do_bfs(q1, g, target_id, tree, hfun)
 
             v2_out ->
-              tree =
-                tree
-                |> Graph.add_vertex(v2_id)
-                |> Graph.add_edge(v2_id, v1_id)
+              tree = Map.put(tree, v2_id, v1_id)
 
               q2 =
                 v2_out
@@ -183,20 +178,17 @@ defmodule Graph.Pathfinding do
 
   defp do_bfs(
          q,
-         %Graph{type: :undirected, vertex_identifier: vertex_identifier} = g,
+         %Graph{type: :undirected} = g,
          target_id,
-         %Graph{vertices: vs_tree} = tree,
+         tree,
          hfun
        ) do
     case PriorityQueue.pop(q) do
       {{:value, {v_id, ^target_id, _}}, _q1} ->
-        v_id_tree = vertex_identifier.(v_id)
-        construct_path(v_id_tree, tree, [target_id])
+        construct_path(v_id, tree, [target_id])
 
       {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
-        v2_id_tree = vertex_identifier.(v2_id)
-
-        if Map.has_key?(vs_tree, v2_id_tree) do
+        if Map.has_key?(tree, v2_id) do
           do_bfs(q1, g, target_id, tree, hfun)
         else
           all_edges = all_edges(g, v2_id)
@@ -204,10 +196,7 @@ defmodule Graph.Pathfinding do
           if MapSet.equal?(all_edges, MapSet.new()) do
             do_bfs(q1, g, target_id, tree, hfun)
           else
-            tree =
-              tree
-              |> Graph.add_vertex(v2_id)
-              |> Graph.add_edge(v2_id, v1_id)
+            tree = Map.put(tree, v2_id, v1_id)
 
             q2 =
               all_edges
@@ -229,16 +218,10 @@ defmodule Graph.Pathfinding do
     end
   end
 
-  defp construct_path(v_id_tree, %Graph{vertices: vs_tree, out_edges: oe_tree} = tree, path) do
-    v_id_actual = Map.get(vs_tree, v_id_tree)
-    path = [v_id_actual | path]
-
-    case oe_tree |> Map.get(v_id_tree, MapSet.new()) |> MapSet.to_list() do
-      [] ->
-        path
-
-      [next_id_tree] ->
-        construct_path(next_id_tree, tree, path)
+  defp construct_path(id, tree, path) do
+    case Map.fetch!(tree, id) do
+      ^id -> [id | path]
+      parent -> construct_path(parent, tree, [id | path])
     end
   end
 
