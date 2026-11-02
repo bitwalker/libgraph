@@ -93,7 +93,65 @@ defmodule Graph.VertexIdentityTest do
     end
   end
 
+  test "legacy numeric endpoint orientation remains queryable and mutable" do
+    for {left, right} <- numeric_ties() do
+      # Older undirected graphs kept caller order when ordinary comparison tied.
+      # Directed insertion recreates that layout without the new normalization.
+      edge = graph() |> Graph.add_edge(left, right) |> Graph.edge(left, right)
+
+      legacy =
+        Graph.new(vertex_identifier: fn v -> v end)
+        |> Graph.add_edge(edge.v2, edge.v1, label: :legacy, weight: 3)
+        |> Map.put(:type, :undirected)
+
+      assert Graph.edge(legacy, left, right, :legacy) !== nil
+      assert Graph.edge(legacy, right, left, :legacy) === Graph.edge(legacy, left, right, :legacy)
+      assert Graph.edges(legacy) === Graph.edges(legacy, left, right)
+      assert Graph.edges(legacy) === Graph.edges(legacy, right, left)
+      assert Graph.add_edge(legacy, left, right, label: :legacy).edges |> map_size() == 1
+      assert Graph.add_edge(legacy, right, left, label: :legacy).edges |> map_size() == 1
+
+      for {from, to} <- [{left, right}, {right, left}] do
+        updated = Graph.update_labelled_edge(legacy, from, to, :legacy, weight: 4)
+        assert Graph.edge(updated, from, to, :legacy).weight == 4
+
+        for result <- [
+              Graph.delete_edge(legacy, from, to),
+              Graph.delete_edge(legacy, from, to, :legacy),
+              Graph.delete_edges(legacy, from, to)
+            ] do
+          assert result.edges == %{}
+          assert Graph.edges(result) == []
+        end
+
+        split = Graph.split_edge(legacy, from, to, :middle)
+        assert Graph.num_edges(split) == 2
+        assert Graph.edge(split, from, to, :legacy) == nil
+        assert Graph.dijkstra(split, from, to) === [from, :middle, to]
+      end
+    end
+  end
+
+  test "existing opposite numeric keys select the same orientation for either query" do
+    for {left, right} <- numeric_ties() do
+      edge = graph() |> Graph.add_edge(left, right, weight: 3) |> Graph.edge(left, right)
+
+      legacy =
+        Graph.new(vertex_identifier: fn v -> v end)
+        |> Graph.add_edge(edge.v1, edge.v2, weight: 3)
+        |> Graph.add_edge(edge.v2, edge.v1, weight: 9)
+        |> Map.put(:type, :undirected)
+
+      assert Graph.edge(legacy, left, right) === edge
+      assert Graph.edge(legacy, right, left) === edge
+    end
+  end
+
   defp graph, do: Graph.new(type: :undirected, vertex_identifier: fn v -> v end)
+
+  defp numeric_ties do
+    Enum.filter(numeric_pairs(), fn {left, right} -> not (left < right) and not (left > right) end)
+  end
 
   defp numeric_pairs do
     [

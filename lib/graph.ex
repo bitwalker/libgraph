@@ -513,26 +513,30 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
   """
   @spec edges(t, vertex, vertex) :: [Edge.t()]
-  def edges(%__MODULE__{type: type, edges: meta, vertex_identifier: vertex_identifier}, v1, v2) do
+  def edges(
+        %__MODULE__{type: type, edges: meta, vertex_identifier: vertex_identifier} = g,
+        v1,
+        v2
+      ) do
     with v1_id <- vertex_identifier.(v1),
          v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          edge_meta <- Map.get(meta, edge_key, %{}) do
       case type do
         :directed ->
-          edge_list(v1, v2, edge_meta, type)
+          edge_list(v1, v2, edge_meta, g)
 
         :undirected ->
           edge_meta2 = Map.get(meta, {v2_id, v1_id}, %{})
           merged_meta = Map.merge(edge_meta, edge_meta2)
 
-          edge_list(v1, v2, merged_meta, type)
+          edge_list(v1, v2, merged_meta, g)
       end
     end
   end
 
-  defp edge_list(v1, v2, edge_meta, :undirected) do
-    {v1, v2} = ordered_vertices(v1, v2)
+  defp edge_list(v1, v2, edge_meta, %__MODULE__{type: :undirected} = g) do
+    {v1, v2} = ordered_vertices(g, v1, v2)
 
     for {label, weight} <- edge_meta do
       Edge.new(v1, v2, label: label, weight: weight)
@@ -545,13 +549,21 @@ defmodule Graph do
     end
   end
 
-  defp ordered_vertices(v1, v2) when v1 > v2, do: {v2, v1}
-  defp ordered_vertices(v1, v2) when v1 < v2 or v1 === v2, do: {v1, v2}
+  defp ordered_vertices(_g, v1, v2) when v1 > v2, do: {v2, v1}
+  defp ordered_vertices(_g, v1, v2) when v1 < v2 or v1 === v2, do: {v1, v2}
 
-  defp ordered_vertices(v1, v2) do
+  defp ordered_vertices(%__MODULE__{edges: meta, vertex_identifier: identifier}, v1, v2) do
     # Ordinary term order ties distinct numeric terms, even inside containers.
     # Map keys use exact term order, so they also distinguish these vertices.
-    if %{v1 => nil} > %{v2 => nil}, do: {v2, v1}, else: {v1, v2}
+    {v1, v2} = if %{v1 => nil} > %{v2 => nil}, do: {v2, v1}, else: {v1, v2}
+    id1 = identifier.(v1)
+    id2 = identifier.(v2)
+
+    # Keep single-orientation graphs built before exact ordering queryable.
+    # Prefer the exact order consistently if both orientations already exist.
+    if not Map.has_key?(meta, {id1, id2}) and Map.has_key?(meta, {id2, id1}),
+      do: {v2, v1},
+      else: {v1, v2}
   end
 
   @doc """
@@ -582,7 +594,7 @@ defmodule Graph do
   end
 
   def edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_edge(g, v1, v2, label)
   end
 
@@ -994,7 +1006,7 @@ defmodule Graph do
   def add_edge(g, v1, v2, opts \\ [])
 
   def add_edge(%__MODULE__{type: :undirected} = g, v1, v2, opts) when is_list(opts) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_add_edge(g, v1, v2, opts)
   end
 
@@ -1098,7 +1110,7 @@ defmodule Graph do
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
   def split_edge(%__MODULE__{type: :undirected} = g, v1, v2, v3) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_split_edge(g, v1, v2, v3)
   end
 
@@ -1179,7 +1191,7 @@ defmodule Graph do
           t | {:error, :no_such_edge}
   def update_labelled_edge(%__MODULE__{type: :undirected} = g, v1, v2, old_label, opts)
       when is_list(opts) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_update_labelled_edge(g, v1, v2, old_label, opts)
   end
 
@@ -1240,7 +1252,7 @@ defmodule Graph do
   """
   @spec delete_edge(t, vertex, vertex) :: t
   def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_delete_edge(g, v1, v2)
   end
 
@@ -1307,7 +1319,7 @@ defmodule Graph do
   """
   @spec delete_edge(t, vertex, vertex, label) :: t
   def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_delete_edge(g, v1, v2, label)
   end
 
@@ -1426,7 +1438,7 @@ defmodule Graph do
   """
   @spec delete_edges(t, vertex, vertex) :: t
   def delete_edges(%__MODULE__{type: :undirected} = g, v1, v2) do
-    {v1, v2} = ordered_vertices(v1, v2)
+    {v1, v2} = ordered_vertices(g, v1, v2)
     do_delete_edges(g, v1, v2)
   end
 
