@@ -115,6 +115,8 @@ defmodule Graph.Directed do
     end
   end
 
+  def strong_components(%Graph{type: :undirected} = g), do: components(g)
+
   def strong_components(%Graph{vertices: vs} = g) do
     for component <- forest(g, &in_neighbors/3, reverse_postorder(g)) do
       for id <- component, do: Map.get(vs, id)
@@ -124,7 +126,9 @@ defmodule Graph.Directed do
   def reachable(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(vertices, id)
+
+    for id <- :lists.append(forest(g, reachability_neighbors(g, :out), vs, :first)),
+        do: Map.get(vertices, id)
   end
 
   def reachable_neighbors(
@@ -134,20 +138,24 @@ defmodule Graph.Directed do
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
 
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)),
+    for id <- :lists.append(forest(g, reachability_neighbors(g, :out), vs, :not_first)),
         do: Map.get(vertices, id)
   end
 
   def reaching(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
-    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(vertices, id)
+
+    for id <- :lists.append(forest(g, reachability_neighbors(g, :in), vs, :first)),
+        do: Map.get(vertices, id)
   end
 
   def reaching_neighbors(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
-    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(vertices, id)
+
+    for id <- :lists.append(forest(g, reachability_neighbors(g, :in), vs, :not_first)),
+        do: Map.get(vertices, id)
   end
 
   def in_neighbors(%Graph{} = g, v, []) do
@@ -185,6 +193,10 @@ defmodule Graph.Directed do
       v_out -> MapSet.to_list(v_out)
     end
   end
+
+  defp reachability_neighbors(%Graph{type: :undirected}, _direction), do: &inout/3
+  defp reachability_neighbors(_g, :out), do: &out_neighbors/3
+  defp reachability_neighbors(_g, :in), do: &in_neighbors/3
 
   ## Private
 
