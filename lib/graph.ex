@@ -1537,6 +1537,11 @@ defmodule Graph do
 
   Multiple edges between two vertices are considered a single edge for purposes of this sort.
 
+  Returns `[]` for an empty directed graph and `false` for undirected input.
+  Self-loops do not prevent an ordering in this function; use `is_acyclic?/1`
+  when self-loops must also be rejected. Callers should handle the list and
+  `false` branches explicitly.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
@@ -1561,6 +1566,10 @@ defmodule Graph do
 
   Multiple edges between two vertices are considered a single edge for purposes of this sort.
 
+  Returns a list of vertex lists, one per batch, or `false` for a cyclic or
+  undirected graph. Unlike `topsort/1`, this function rejects self-loops.
+  An empty directed graph returns `[]`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c])
@@ -1583,7 +1592,7 @@ defmodule Graph do
       ...> Graph.batch_topsort(g)
       false
   """
-  @spec batch_topsort(t) :: [vertex] | false
+  @spec batch_topsort(t) :: [[vertex]] | false
   def batch_topsort(%__MODULE__{type: :undirected}), do: false
   def batch_topsort(%__MODULE__{} = g), do: Graph.Directed.batch_topsort(g)
 
