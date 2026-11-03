@@ -760,7 +760,12 @@ defmodule Graph do
   end
 
   @doc """
-  Updates the labels for the given vertex.
+  Appends labels to the given vertex. To replace its complete label list, first
+  call `remove_vertex_labels/2` and then label the returned graph.
+
+  Graph values are immutable: references to earlier graphs keep their labels
+  alive. Binary labels can share backing storage with larger binaries; callers
+  can inspect `:binary.referenced_byte_size/1` when investigating retention.
 
   If no such vertex exists in the graph, `{:error, {:invalid_vertex, v}}` is returned.
 

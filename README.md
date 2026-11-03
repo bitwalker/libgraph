@@ -132,6 +132,25 @@ deadline and report vertex/edge counts, maximum reachable depth, result count,
 time, reductions and process memory. Sampled memory peaks are lower bounds;
 process memory is not RSS or total off-heap binary storage.
 
+## Diagnosing label memory
+
+Keep only the latest graph when replacing labels unless historical snapshots are
+intentional. `Graph.label_vertex/3` appends labels; use `remove_vertex_labels/2`
+before labeling when replacing the complete list. Old graph values, queued
+messages, or references elsewhere in the application can retain earlier labels.
+
+Run `mix run bench/label_memory.exs` to compare direct and minimal GenServer label
+updates, owned binaries, sub-binaries, and deliberately retained graph history.
+It reports graph/label counts, mailbox size, process memory and referenced binary
+storage before and after diagnostic garbage collection. Checkpoint samples are
+not peak allocation or RSS, and process memory excludes off-heap binary storage.
+
+A small sub-binary can retain a much larger parent; compare `byte_size/1` with
+`:binary.referenced_byte_size/1`. Copy a value at the caller boundary with
+`:binary.copy/1` when measurements demonstrate unwanted parent retention. Forced
+GC is useful as a diagnostic control, not a general label-update policy. The
+isolated benchmark cannot rule out retention in application wrappers or callers.
+
 ## Contributing
 
 The library supports Elixir 1.10 and later. CI checks the 1.10/OTP 23 floor in a digest-pinned container and representative Elixir/OTP pairs through the current release. Runtime versions and image digests are recorded in `.github/workflows/elixir.yml`.
