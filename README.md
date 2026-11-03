@@ -119,6 +119,19 @@ NOTE: While this library is primarily focused on the `Graph` data structure it d
 of a priority queue (you can find it under the `PriorityQueue` module), designed for use with graphs specifically, as it
 considers lower integer values higher priority, which is perfect for the kinds of graph algorithms you need a priority queue for.
 
+## Diagnosing path searches
+
+`Graph.get_paths/3` eagerly enumerates paths. A small layered graph can have an
+exponential number of paths, and an unreachable target can still require extensive
+exploration. Applying `Enum.take/2` to the returned list does not bound that work.
+Use `Graph.get_shortest_path/3` or `Graph.dijkstra/3` when one shortest path suffices.
+
+Run `mix run bench/all_paths.exs` to compare chains, branching trees, cycles,
+layered DAGs and disconnected targets. The fixed fixtures have a ten-second search
+deadline and report vertex/edge counts, maximum reachable depth, result count,
+time, reductions and process memory. Sampled memory peaks are lower bounds;
+process memory is not RSS or total off-heap binary storage.
+
 ## Contributing
 
 The library supports Elixir 1.10 and later. CI checks the 1.10/OTP 23 floor in a digest-pinned container and representative Elixir/OTP pairs through the current release. Runtime versions and image digests are recorded in `.github/workflows/elixir.yml`.

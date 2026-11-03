@@ -409,6 +409,13 @@ defmodule Graph do
   graph until all paths are found. Order is guaranteed to be deterministic,
   but not guaranteed to be in any meaningful order (i.e. shortest to longest).
 
+  Results are built eagerly. The number of paths can grow exponentially even in
+  a small layered acyclic graph; a disconnected target can also require extensive
+  exploration. Vertex count alone does not bound search time or result memory.
+  Taking a prefix with `Enum.take/2` afterwards does not limit the search.
+
+  Use `get_shortest_path/3` or `dijkstra/3` when one shortest path is sufficient.
+
   ## Example
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:b, :d}, {:c, :a}])
       ...> Graph.get_paths(g, :a, :d)
