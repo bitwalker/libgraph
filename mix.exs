@@ -4,7 +4,7 @@ defmodule Graph.Mixfile do
   def project do
     [
       app: :libgraph,
-      version: "0.17.0",
+      version: "0.17.1",
       elixir: "~> 1.10",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -48,7 +48,7 @@ defmodule Graph.Mixfile do
   defp deps do
     [
       {:benchee, "~> 1.0", only: [:bench]},
-      {:stream_data, "~> 0.5", only: [:test]},
+      {:stream_data, "~> 0.4", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.28", only: :dev, runtime: false}
     ]
