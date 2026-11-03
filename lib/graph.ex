@@ -1694,6 +1694,11 @@ defmodule Graph do
   Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
   collecting visited vertices in preorder.
 
+  The traversal forms a depth-first forest, with arbitrary starting vertices and
+  neighbor order. For a directed graph, visiting a sink before its predecessors
+  can make preorder and postorder identical. Neither traversal promises insertion,
+  lexical, or dependency order; use `topsort/1` for a topological order of a DAG.
+
   ## Example
 
   Our example code constructs a graph which looks like so:
@@ -1719,6 +1724,10 @@ defmodule Graph do
   collecting visited vertices in postorder. More precisely, the vertices visited while searching from an
   arbitrarily chosen vertex are collected in postorder, and all those collected vertices are placed before
   the subsequently visited vertices.
+
+  Starting vertices and neighbor order are arbitrary, so this may equal
+  `preorder/1`, particularly when directed sinks are visited as separate trees.
+  Use `topsort/1` when dependency order is required.
 
   ## Example
 
