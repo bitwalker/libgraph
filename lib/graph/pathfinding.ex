@@ -109,7 +109,7 @@ defmodule Graph.Pathfinding do
     with a_id <- vertex_identifier.(a),
          b_id <- vertex_identifier.(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
-      case dfs(g, a_out, b_id, [a_id], []) do
+      case dfs(g, a_out, b_id, [a_id], MapSet.new([a_id]), []) do
         [] ->
           []
 
@@ -225,35 +225,46 @@ defmodule Graph.Pathfinding do
     end
   end
 
-  defp dfs(%Graph{} = g, neighbors, target_id, path, paths) when is_list(paths) do
-    {paths, visited} =
+  defp dfs(%Graph{} = g, neighbors, target_id, path, visited, paths) when is_list(paths) do
+    {paths, excluded} =
       if MapSet.member?(neighbors, target_id) do
-        {[Enum.reverse([target_id | path]) | paths], [target_id | path]}
+        {[Enum.reverse([target_id | path]) | paths], MapSet.put(visited, target_id)}
       else
-        {paths, path}
+        {paths, visited}
       end
 
-    neighbors = MapSet.difference(neighbors, MapSet.new(visited))
-    do_dfs(g, MapSet.to_list(neighbors), target_id, path, paths)
+    neighbors = MapSet.difference(neighbors, excluded)
+    do_dfs(g, MapSet.to_list(neighbors), target_id, path, visited, paths)
   end
 
-  defp do_dfs(_g, [], _target_id, _path, paths) when is_list(paths) do
+  defp do_dfs(_g, [], _target_id, _path, _visited, paths) when is_list(paths) do
     paths
   end
 
-  defp do_dfs(%Graph{out_edges: oe} = g, [next_neighbor_id | neighbors], target_id, path, acc) do
+  defp do_dfs(
+         %Graph{out_edges: oe} = g,
+         [next_neighbor_id | neighbors],
+         target_id,
+         path,
+         visited,
+         acc
+       ) do
     case Map.get(oe, next_neighbor_id) do
       nil ->
-        do_dfs(g, neighbors, target_id, path, acc)
+        do_dfs(g, neighbors, target_id, path, visited, acc)
 
       next_neighbors ->
-        case dfs(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
-          [] ->
-            do_dfs(g, neighbors, target_id, path, acc)
+        paths =
+          dfs(
+            g,
+            next_neighbors,
+            target_id,
+            [next_neighbor_id | path],
+            MapSet.put(visited, next_neighbor_id),
+            acc
+          )
 
-          paths ->
-            do_dfs(g, neighbors, target_id, path, paths)
-        end
+        do_dfs(g, neighbors, target_id, path, visited, paths)
     end
   end
 end
