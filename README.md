@@ -69,6 +69,30 @@ hashed and identity keys with `mix run bench/vertex_identity.exs`. The benchmark
 includes reused and reconstructed structured endpoints; workload-specific sharing
 can materially affect memory use. See `Graph.new/1` for the identifier contract.
 
+## Parallel edges
+
+Edge identity includes both endpoints and the label. Different labels distinguish
+parallel edges; adding the same endpoints and label again updates its weight:
+
+```elixir
+graph =
+  Graph.new()
+  |> Graph.add_edge(:a, :b, label: :reads)
+  |> Graph.add_edge(:a, :b, label: :writes)
+  |> Graph.add_edge(:a, :b, label: :reads, weight: 5)
+
+Graph.num_edges(graph) # 2
+Graph.neighbors(graph, :a) # [:b]
+```
+
+Edge enumeration and degrees count labeled edges; neighbor lists contain each
+neighbor once. Undirected endpoint reversal addresses the same labeled edge.
+There are no separate edge IDs for multiple edges with identical labels.
+
+DOT export preserves parallel edges by omitting `strict` when needed. Labels are
+display text, not arbitrary Graphviz attributes: a label containing a color value
+does not set edge color. Styling requires a custom serializer or editing the DOT.
+
 ## Rationale
 
 The original motivation for me to start working on this library is the fact that `:digraph` requires a

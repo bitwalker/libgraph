@@ -201,8 +201,9 @@ defmodule Graph do
   @doc """
   Returns the number of edges in the graph.
 
-  Pseudo-edges (label/weight pairs applied to an edge) are not counted, only distinct
-  vertex pairs where an edge exists between them are counted.
+  Each differently labeled edge between a vertex pair is counted separately.
+  Repeated insertion with the same endpoints and label updates that edge rather
+  than increasing the count. Neighbor lists still contain each neighbor once.
 
   ## Example
 
@@ -1019,8 +1020,9 @@ defmodule Graph do
 
   @doc """
   Adds an edge connecting `v1` to `v2`. If either `v1` or `v2` do not exist in the graph,
-  they are automatically added. Adding the same edge more than once does not create multiple edges,
-  each edge is only ever stored once.
+  they are automatically added. Edges are identified by their endpoints and label:
+  different labels distinguish parallel edges, while adding the same endpoints and
+  label again updates the existing edge's weight.
 
   Edges have a default weight of 1, and an empty (nil) label. You can change this by passing options
   to this function, as shown below.
@@ -1036,6 +1038,11 @@ defmodule Graph do
       ...> [:a, :b] = Graph.vertices(g)
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
+
+      iex> g = Graph.new |> Graph.add_edge(:a, :b, label: :x) |> Graph.add_edge(:a, :b, label: :y)
+      ...> g = Graph.add_edge(g, :a, :b, label: :x, weight: 5)
+      ...> {Graph.num_edges(g), Graph.edge(g, :a, :b, :x).weight, Graph.neighbors(g, :a)}
+      {2, 5, [:b]}
   """
   @spec add_edge(t, vertex, vertex) :: t
   @spec add_edge(t, vertex, vertex, Edge.edge_opts()) :: t | no_return
