@@ -93,6 +93,24 @@ DOT export preserves parallel edges by omitting `strict` when needed. Labels are
 display text, not arbitrary Graphviz attributes: a label containing a color value
 does not set edge color. Styling requires a custom serializer or editing the DOT.
 
+## Bulk vertex labels
+
+Reduce `Graph.add_vertex/3` over records that you explicitly interpret as vertex
+and labels:
+
+```elixir
+labeled = [{:a, [:start]}, {:b, [:finish]}]
+
+graph = Enum.reduce(labeled, Graph.new(), fn {vertex, labels}, graph ->
+  Graph.add_vertex(graph, vertex, labels)
+end)
+```
+
+Use the same reduction with a common label for every vertex if needed. Empty input
+keeps the initial graph; duplicate identifiers keep the first vertex and labels.
+`Graph.add_vertices/2` continues to treat every item as a vertex, so tuples and
+lists are never implicitly interpreted as labeling instructions.
+
 ## Rationale
 
 The original motivation for me to start working on this library is the fact that `:digraph` requires a

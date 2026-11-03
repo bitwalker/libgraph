@@ -749,11 +749,23 @@ defmodule Graph do
   @doc """
   Like `add_vertex/2`, but takes a list of vertices to add to the graph.
 
+  Each item is a vertex, including tuples and lists. To attach labels in bulk,
+  explicitly reduce `add_vertex/3` over your own `{vertex, labels}` records.
+  Repeated identifiers keep the first inserted vertex and labels, just as in
+  `add_vertex/3`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :a])
       ...> Graph.vertices(g)
       [:a, :b]
+
+      iex> labeled = [{:a, [:start]}, {:b, [:finish]}]
+      ...> g = Enum.reduce(labeled, Graph.new(), fn {vertex, labels}, graph ->
+      ...>   Graph.add_vertex(graph, vertex, labels)
+      ...> end)
+      ...> {Graph.vertex_labels(g, :a), Graph.vertex_labels(g, :b)}
+      {[:start], [:finish]}
   """
   @spec add_vertices(t, [vertex]) :: t
   def add_vertices(%__MODULE__{} = g, vs) when is_list(vs) do
