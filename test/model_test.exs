@@ -1,22 +1,22 @@
-defmodule Graph.Model.Test do
+defmodule Graph.ModelTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
   @moduletag timeout: :infinity
 
-  property "a directed acyclic graph (DAG) is always acyclic" do
+  test "a directed acyclic graph (DAG) is always acyclic" do
     check all(g <- dag(), max_runs: 1000) do
       Graph.is_acyclic?(g)
     end
   end
 
-  property "a directed acyclic graph (DAG) is always topologically sortable" do
+  test "a directed acyclic graph (DAG) is always topologically sortable" do
     check all(g <- dag(), max_runs: 1000) do
       assert Graph.topsort(g) != false
     end
   end
 
-  property "a topsort of a DAG is correct if each element only has edges pointing to subsequent elements" do
+  test "a topsort of a DAG is correct if each element only has edges pointing to subsequent elements" do
     check all(%Graph{vertices: vs, out_edges: oe} = g <- dag(), max_runs: 1000) do
       sorted = Graph.topsort(g)
 
@@ -48,19 +48,19 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "a directed cyclic graph (DCG) is always cyclic" do
+  test "a directed cyclic graph (DCG) is always cyclic" do
     check all(g <- dcg(), max_runs: 1000) do
       assert Graph.is_cyclic?(g)
     end
   end
 
-  property "a directed cyclic graph (DCG) is never topologically sortable" do
+  test "a directed cyclic graph (DCG) is never topologically sortable" do
     check all(g <- dcg(), max_runs: 1000) do
       assert Graph.topsort(g) == false
     end
   end
 
-  property "the out degree of a vertex is equal to the number of out neighbors of that vertex (DAG)" do
+  test "the out degree of a vertex is equal to the number of out neighbors of that vertex (DAG)" do
     check all(g <- dag()) do
       vs = Graph.vertices(g)
 
@@ -74,7 +74,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the in degree of a vertex is equal to the number of in neighbors of that vertex (DAG)" do
+  test "the in degree of a vertex is equal to the number of in neighbors of that vertex (DAG)" do
     check all(g <- dag()) do
       vs = Graph.vertices(g)
 
@@ -88,7 +88,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the out degree of a vertex is equal to the number of out neighbors of that vertex (DCG)" do
+  test "the out degree of a vertex is equal to the number of out neighbors of that vertex (DCG)" do
     check all(g <- dcg()) do
       vs = Graph.vertices(g)
 
@@ -102,7 +102,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the in degree of a vertex is equal to the number of in neighbors of that vertex (DCG)" do
+  test "the in degree of a vertex is equal to the number of in neighbors of that vertex (DCG)" do
     check all(g <- dcg()) do
       vs = Graph.vertices(g)
 
@@ -116,7 +116,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the subgraph G' of a given graph G, implies that the vertices and edges of G' form subsets of those from G (DAG)" do
+  test "the subgraph G' of a given graph G, implies that the vertices and edges of G' form subsets of those from G (DAG)" do
     check all(g <- dag(), Graph.num_vertices(g) > 0) do
       g_vertices = g |> Graph.vertices() |> MapSet.new()
       g_edges = g |> Graph.edges() |> MapSet.new()
@@ -131,7 +131,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the subgraph G' of a given graph G, implies that the vertices and edges of G' form subsets of those from G (DCG)" do
+  test "the subgraph G' of a given graph G, implies that the vertices and edges of G' form subsets of those from G (DCG)" do
     check all(g <- dcg()) do
       g_vertices = g |> Graph.vertices() |> MapSet.new()
       g_edges = g |> Graph.edges() |> MapSet.new()
@@ -146,7 +146,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "connected components of a graph are lists of vertices where exists an adirectional path between each pair of vertices" do
+  test "connected components of a graph are lists of vertices where exists an adirectional path between each pair of vertices" do
     check all(g <- dag(), Graph.num_vertices(g) > 0) do
       components = Graph.components(g)
 
@@ -163,7 +163,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "strongly connected components of a graph are lists of vertices where exits a bidirectional path between each pair of vertices" do
+  test "strongly connected components of a graph are lists of vertices where exits a bidirectional path between each pair of vertices" do
     check all(g <- dcg()) do
       strong_components = Graph.strong_components(g)
 
@@ -177,7 +177,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the degeneracy core of a DAG is the maximum k_core of a given graph" do
+  test "the degeneracy core of a DAG is the maximum k_core of a given graph" do
     check all(g <- dag()) do
       k_cores = Graph.k_core_components(g)
       degeneracy = Graph.degeneracy(g)
@@ -187,7 +187,7 @@ defmodule Graph.Model.Test do
     end
   end
 
-  property "the degeneracy core of a DCG is the maximum k_core of a given graph" do
+  test "the degeneracy core of a DCG is the maximum k_core of a given graph" do
     check all(g <- dcg()) do
       k_cores = Graph.k_core_components(g)
       degeneracy = Graph.degeneracy(g)

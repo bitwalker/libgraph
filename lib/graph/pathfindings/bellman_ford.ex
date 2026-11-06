@@ -11,7 +11,8 @@ defmodule Graph.Pathfindings.BellmanFord do
   @doc """
   Returns nil when graph has negative cycle.
   """
-  @spec call(Graph.t(), Graph.vertex()) :: %{Graph.vertex() => integer() | :infinity} | nil
+  @spec call(Graph.t(), Graph.vertex()) ::
+          %{Graph.vertex() => integer() | :infinity} | nil
   def call(%Graph{} = g, a), do: do_call(g, a, nil)
 
   def call(%Graph{} = g, a, opts) when is_list(opts) do

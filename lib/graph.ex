@@ -25,7 +25,7 @@ defmodule Graph do
   edge can be done with very little effort. We use vertex ids everywhere because we can generate them without any lookups,
   we don't incur any copies of the vertex structure, and they are very efficient as keys in a map.
 
-  ## Multigraphs
+  ## Graphs
 
   When `multigraph: true` is passed to `Graph.new/1`, an edge adjacency index (`edge_index`) is maintained
   alongside the standard graph structure. This index partitions edges by a key derived from a `partition_by`
@@ -103,10 +103,10 @@ defmodule Graph do
   - `partition_by`: a function which accepts an `%Edge{}` and returns a list of unique identifiers used as the partition keys.
     Defaults to `Graph.Utils.by_edge_label/1`, which partitions edges by the label when multigraphs are enabled.
 
-  ### Multigraph Edge Indexing
+  ### Graph Edge Indexing
 
   When `multigraph: true` is enabled the `partition_by` function maintains sets of edges for the partition.
-  This option enables a space for time trade-off for Map access retrieval partitioned edges of a kind i.e. [multigraph](https://en.wikipedia.org/wiki/Multigraph) capabilities.
+  This option enables a space for time trade-off for Map access retrieval partitioned edges of a kind i.e. [multigraph](https://en.wikipedia.org/wiki/Graph) capabilities.
 
   This edge adjacency index can be useful for graphs where many different kinds of edges exist between the same vertices and
   iteration over all edges is prohibitive.
@@ -405,7 +405,8 @@ defmodule Graph do
       [:a, :b, :d]
   """
   @spec dijkstra(t, vertex, vertex, keyword) :: [vertex] | nil
-  def dijkstra(g, a, b, opts) when is_list(opts), do: Graph.Pathfinding.dijkstra(g, a, b, opts)
+  def dijkstra(g, a, b, opts) when is_list(opts),
+    do: Graph.Pathfinding.dijkstra(g, a, b, opts)
 
   @doc """
   ## Example
@@ -444,7 +445,8 @@ defmodule Graph do
       3
   """
   @spec bellman_ford(t, vertex, keyword) :: [vertex]
-  def bellman_ford(g, a, opts) when is_list(opts), do: Graph.Pathfinding.bellman_ford(g, a, opts)
+  def bellman_ford(g, a, opts) when is_list(opts),
+    do: Graph.Pathfinding.bellman_ford(g, a, opts)
 
   @doc """
   Gets the shortest path between `a` and `b`.
@@ -747,51 +749,48 @@ defmodule Graph do
     end)
   end
 
-  defp edges_in_partitions(g, v1, partitions, where_fun) do
-    v1_id = g.vertex_identifier.(v1)
+  defp edges_in_partitions(g, v, partitions, where_fun) do
+    incident_edges_in_partitions(g, v, partitions, where_fun, :both)
+  end
 
-    out_edges_set =
-      g.out_edges
-      |> Map.get(v1_id, MapSet.new())
-      |> MapSet.new(fn v2_id ->
-        {v1_id, v2_id}
-      end)
+  # The index already stores the endpoint pair at each incident vertex. Starting
+  # here avoids materializing the complete unfiltered adjacency (including
+  # unrelated history) merely to intersect it with a small structural partition.
+  # Direction checks happen before constructing edges or invoking predicates.
+  defp incident_edges_in_partitions(g, v, partitions, where_fun, direction) do
+    v_id = g.vertex_identifier.(v)
 
-    in_edges_set =
-      g.in_edges
-      |> Map.get(v1_id, MapSet.new())
-      |> MapSet.new(fn v2_id ->
-        {v2_id, v1_id}
-      end)
+    partitions
+    |> Enum.reduce(MapSet.new(), fn partition, acc ->
+      g.edge_index
+      |> Map.get(partition, %{})
+      |> Map.get(v_id, MapSet.new())
+      |> MapSet.union(acc)
+    end)
+    |> Enum.flat_map(fn {v1_id, v2_id} = edge_key ->
+      if g.type == :undirected or direction == :both or
+           (direction == :in and v2_id == v_id) or
+           (direction == :out and v1_id == v_id) do
+        g.edges
+        |> Map.get(edge_key, %{})
+        |> Enum.reduce([], fn {label, weight}, acc ->
+          # Ignore stale index candidates without canonical records before
+          # resolving endpoints (e.g. older changed-ID replace_vertex results).
+          v1 = Map.fetch!(g.vertices, v1_id)
+          v2 = Map.fetch!(g.vertices, v2_id)
+          props = get_edge_props(g.edge_properties, edge_key, label)
+          edge = Edge.new(v1, v2, label: label, weight: weight, properties: props)
+          edge_partitions = g.partition_by.(edge)
 
-    edges = MapSet.union(out_edges_set, in_edges_set)
-
-    edge_adjacency_set =
-      partitions
-      |> Enum.reduce(MapSet.new(), fn partition, acc ->
-        g.edge_index
-        |> Map.get(partition, %{})
-        |> Map.get(v1_id, MapSet.new())
-        |> MapSet.union(acc)
-      end)
-      |> MapSet.intersection(edges)
-
-    Enum.flat_map(edge_adjacency_set, fn {_v1_id, v2_id} = edge_key ->
-      v2 = Map.get(g.vertices, v2_id)
-
-      g.edges
-      |> Map.get(edge_key, [])
-      |> Enum.reduce([], fn {label, weight}, acc ->
-        props = get_edge_props(g.edge_properties, edge_key, label)
-        edge = Edge.new(v1, v2, label: label, weight: weight, properties: props)
-        edge_partitions = g.partition_by.(edge)
-
-        if include_edge_for_filtered_partitions?(edge, edge_partitions, partitions, where_fun) do
-          [edge | acc]
-        else
-          acc
-        end
-      end)
+          if include_edge_for_filtered_partitions?(edge, edge_partitions, partitions, where_fun) do
+            [edge | acc]
+          else
+            acc
+          end
+        end)
+      else
+        []
+      end
     end)
   end
 
@@ -806,6 +805,14 @@ defmodule Graph do
       %{^edge_key => %{^label => props}} -> props
       _ -> %{}
     end
+  end
+
+  defp delete_edge_properties(properties, edge_key, label) do
+    remaining = properties |> Map.get(edge_key, %{}) |> Map.delete(label)
+
+    if map_size(remaining) == 0,
+      do: Map.delete(properties, edge_key),
+      else: Map.put(properties, edge_key, remaining)
   end
 
   defp edge_list(v1, v2, edge_meta, :undirected) do
@@ -1188,7 +1195,7 @@ defmodule Graph do
 
     with v_id <- vertex_identifier.(v),
          true <- Map.has_key?(vs, v_id) do
-      g = prune_vertex_from_edge_index(g, v_id, v)
+      g = %__MODULE__{} = prune_vertex_from_edge_index(g, v_id, v)
 
       oe = Map.delete(g.out_edges, v_id)
       ie = Map.delete(g.in_edges, v_id)
@@ -1197,7 +1204,22 @@ defmodule Graph do
       oe = for {id, ns} <- oe, do: {id, MapSet.delete(ns, v_id)}, into: %{}
       ie = for {id, ns} <- ie, do: {id, MapSet.delete(ns, v_id)}, into: %{}
       em = for {{id1, id2}, _} = e <- em, v_id != id1 && v_id != id2, do: e, into: %{}
-      %__MODULE__{g | vertices: vs, vertex_labels: ls, out_edges: oe, in_edges: ie, edges: em}
+
+      ep =
+        for {{id1, id2}, _} = entry <- g.edge_properties,
+            v_id != id1 and v_id != id2,
+            into: %{},
+            do: entry
+
+      %__MODULE__{
+        g
+        | vertices: vs,
+          vertex_labels: ls,
+          out_edges: oe,
+          in_edges: ie,
+          edges: em,
+          edge_properties: ep
+      }
     else
       _ -> g
     end
@@ -1310,9 +1332,18 @@ defmodule Graph do
       end
 
     g =
+      %__MODULE__{} =
       if g.multigraph do
-        edge = Edge.new(v1, v2, label: label, weight: weight, properties: properties)
-        index_multigraph_edge(g, edge_key, edge)
+        edge =
+          Edge.new(v1, v2,
+            label: label,
+            weight: weight,
+            properties: get_edge_props(ep, edge_key, label)
+          )
+
+        g
+        |> prune_edge_index({v1_id, v1}, {v2_id, v2}, label)
+        |> index_multigraph_edge(edge_key, edge)
       else
         g
       end
@@ -1333,7 +1364,7 @@ defmodule Graph do
        ) do
     partitions = graph.partition_by.(edge)
 
-    Enum.reduce(partitions, graph, fn partition, g ->
+    Enum.reduce(partitions, graph, fn partition, %__MODULE__{} = g ->
       edge_partition = Map.get(g.edge_index, partition, %{})
 
       v1_set = Map.get(edge_partition, v1_id, MapSet.new())
@@ -1450,7 +1481,7 @@ defmodule Graph do
          meta <- Map.get(em, {v1_id, v2_id}),
          v1_out <- MapSet.delete(v1_out, v2_id),
          v2_in <- MapSet.delete(v2_in, v1_id) do
-      g = prune_all_edge_indexes(g, {v1_id, v1}, {v2_id, v2})
+      g = %__MODULE__{} = prune_all_edge_indexes(g, {v1_id, v1}, {v2_id, v2})
 
       g = %__MODULE__{
         g
@@ -1550,11 +1581,11 @@ defmodule Graph do
       case new_label do
         ^old_label ->
           new_meta = Map.put(meta, old_label, new_weight)
-          %__MODULE__{g | edges: Map.put(em, edge_key, new_meta), edge_properties: ep}
+          replace_edge_metadata(g, {v1_id, v1}, {v2_id, v2}, new_meta, ep)
 
         nil ->
           new_meta = Map.put(meta, old_label, new_weight)
-          %__MODULE__{g | edges: Map.put(em, edge_key, new_meta), edge_properties: ep}
+          replace_edge_metadata(g, {v1_id, v1}, {v2_id, v2}, new_meta, ep)
 
         _ ->
           new_meta = Map.put(Map.delete(meta, old_label), new_label, new_weight)
@@ -1578,27 +1609,34 @@ defmodule Graph do
                   else: Map.put(ep, edge_key, label_props)
             end
 
-          if g.multigraph do
-            g =
-              g
-              |> prune_edge_index({v1_id, v1}, {v2_id, v2}, old_label)
-              |> index_multigraph_edge(
-                {v1_id, v2_id},
-                Edge.new(v1, v2,
-                  label: new_label,
-                  weight: new_weight,
-                  properties: new_properties
-                )
-              )
-
-            %__MODULE__{g | edges: Map.put(em, edge_key, new_meta), edge_properties: ep}
-          else
-            %__MODULE__{g | edges: Map.put(em, edge_key, new_meta), edge_properties: ep}
-          end
+          replace_edge_metadata(g, {v1_id, v1}, {v2_id, v2}, new_meta, ep)
       end
     else
       _ ->
         {:error, :no_such_edge}
+    end
+  end
+
+  # Rebuild only the changed endpoint pair's memberships. A relabel can replace
+  # an existing label whose property-based partitions also need to be removed.
+  defp replace_edge_metadata(g, {v1_id, v1} = from, {v2_id, v2} = to, meta, properties) do
+    edge_key = {v1_id, v2_id}
+    g = prune_all_edge_indexes(g, from, to)
+    g = %{g | edges: Map.put(g.edges, edge_key, meta), edge_properties: properties}
+
+    if g.multigraph do
+      Enum.reduce(meta, g, fn {label, weight}, acc ->
+        edge =
+          Edge.new(v1, v2,
+            label: label,
+            weight: weight,
+            properties: get_edge_props(properties, edge_key, label)
+          )
+
+        index_multigraph_edge(acc, edge_key, edge)
+      end)
+    else
+      g
     end
   end
 
@@ -1649,7 +1687,7 @@ defmodule Graph do
          edge_key <- {v1_id, v2_id},
          {:ok, v1_out} <- Map.fetch(oe, v1_id),
          {:ok, v2_in} <- Map.fetch(ie, v2_id) do
-      g = prune_all_edge_indexes(g, {v1_id, v1}, {v2_id, v2})
+      g = %__MODULE__{} = prune_all_edge_indexes(g, {v1_id, v1}, {v2_id, v2})
       v1_out = MapSet.delete(v1_out, v2_id)
       v2_in = MapSet.delete(v2_in, v1_id)
       meta = Map.delete(meta, edge_key)
@@ -1658,7 +1696,8 @@ defmodule Graph do
         g
         | in_edges: Map.put(ie, v2_id, v2_in),
           out_edges: Map.put(oe, v1_id, v1_out),
-          edges: meta
+          edges: meta,
+          edge_properties: Map.delete(g.edge_properties, edge_key)
       }
     else
       _ -> g
@@ -1713,7 +1752,31 @@ defmodule Graph do
       {:ok, weight} ->
         props = get_edge_props(ep, edge_key, label)
         edge = Edge.new(v1, v2, label: label, weight: weight, properties: props)
-        prune_edge_key_from_partitions(g, edge_key, v1_id, v2_id, partition_by.(edge))
+        # The index stores endpoint pairs, not individual labels. Removing one
+        # label must retain memberships contributed by another parallel label.
+        retained_partitions =
+          meta
+          |> Map.fetch!(edge_key)
+          |> Map.delete(label)
+          |> Enum.flat_map(fn {other_label, other_weight} ->
+            other_props = get_edge_props(ep, edge_key, other_label)
+
+            partition_by.(
+              Edge.new(v1, v2,
+                label: other_label,
+                weight: other_weight,
+                properties: other_props
+              )
+            )
+          end)
+          |> MapSet.new()
+
+        removed_partitions =
+          edge
+          |> partition_by.()
+          |> Enum.reject(&MapSet.member?(retained_partitions, &1))
+
+        prune_edge_key_from_partitions(g, edge_key, v1_id, v2_id, removed_partitions)
 
       :error ->
         g
@@ -1721,35 +1784,36 @@ defmodule Graph do
   end
 
   defp prune_edge_key_from_partitions(g, edge_key, v1_id, v2_id, partitions) do
-    Enum.reduce(partitions, g, fn edge_p, acc ->
+    Enum.reduce(partitions, g, fn edge_p, %__MODULE__{} = acc ->
+      partition = Map.get(acc.edge_index, edge_p, %{})
+      partition = delete_endpoint_edge(partition, v1_id, edge_key)
+
       partition =
-        acc.edge_index
-        |> Map.get(edge_p, %{})
-        |> Enum.reduce(%{}, fn {k, v}, new_partition ->
-          cond do
-            k == v1_id or k == v2_id ->
-              remaining = MapSet.delete(v, edge_key)
+        if v1_id == v2_id,
+          do: partition,
+          else: delete_endpoint_edge(partition, v2_id, edge_key)
 
-              if MapSet.size(remaining) > 0 do
-                Map.put(new_partition, k, remaining)
-              else
-                new_partition
-              end
+      edge_index =
+        if map_size(partition) == 0,
+          do: Map.delete(acc.edge_index, edge_p),
+          else: Map.put(acc.edge_index, edge_p, partition)
 
-            true ->
-              Map.put(new_partition, k, v)
-          end
-        end)
-
-      updated_edge_index =
-        if partition != %{} do
-          Map.put(acc.edge_index, edge_p, partition)
-        else
-          Map.delete(acc.edge_index, edge_p)
-        end
-
-      %__MODULE__{acc | edge_index: updated_edge_index}
+      %__MODULE__{acc | edge_index: edge_index}
     end)
+  end
+
+  defp delete_endpoint_edge(partition, vertex_id, edge_key) do
+    case Map.fetch(partition, vertex_id) do
+      :error ->
+        partition
+
+      {:ok, edges} ->
+        remaining = MapSet.delete(edges, edge_key)
+
+        if MapSet.size(remaining) == 0,
+          do: Map.delete(partition, vertex_id),
+          else: Map.put(partition, vertex_id, remaining)
+    end
   end
 
   defp prune_vertex_from_edge_index(%__MODULE__{multigraph: false} = g, _v_id, _v), do: g
@@ -1833,8 +1897,9 @@ defmodule Graph do
          {:ok, v2_in} <- Map.fetch(ie, v2_id),
          {:ok, edge_meta} <- Map.fetch(meta, edge_key),
          {:ok, _} <- Map.fetch(edge_meta, label) do
-      g = prune_edge_index(g, {v1_id, v1}, {v2_id, v2}, label)
+      g = %__MODULE__{} = prune_edge_index(g, {v1_id, v1}, {v2_id, v2}, label)
       edge_meta = Map.delete(edge_meta, label)
+      g = %{g | edge_properties: delete_edge_properties(g.edge_properties, edge_key, label)}
 
       case map_size(edge_meta) do
         0 ->
@@ -2701,53 +2766,8 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}]
   """
   @spec in_edges(t, vertex, [{:by, term}]) :: [Edge.t()]
-  def in_edges(
-        %__MODULE__{
-          vertices: vs,
-          edges: edges,
-          in_edges: ie,
-          multigraph: true,
-          vertex_identifier: vertex_identifier,
-          edge_index: edge_index,
-          partition_by: partition_by,
-          edge_properties: ep
-        },
-        v,
-        by: partition
-      ) do
-    v2_id = vertex_identifier.(v)
-
-    in_edges_set =
-      ie
-      |> Map.get(v2_id, MapSet.new())
-      |> MapSet.new(fn v1_id ->
-        {v1_id, v2_id}
-      end)
-
-    in_edge_adjacency_set =
-      edge_index
-      |> Map.get(partition, %{})
-      |> Map.get(v2_id, MapSet.new())
-      |> MapSet.intersection(in_edges_set)
-
-    Enum.flat_map(in_edge_adjacency_set, fn {v1_id, _v2_id} = edge_key ->
-      v1 = Map.get(vs, v1_id)
-
-      edges
-      |> Map.get(edge_key, [])
-      |> Enum.map(fn {label, weight} ->
-        props = get_edge_props(ep, edge_key, label)
-        edge = Edge.new(v1, v, label: label, weight: weight, properties: props)
-        edge_partitions = partition_by.(edge)
-
-        if Enum.any?(edge_partitions, fn edge_partition -> edge_partition == partition end) do
-          edge
-        else
-          nil
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-    end)
+  def in_edges(%__MODULE__{multigraph: true} = g, v, by: partition) do
+    incident_edges_in_partitions(g, v, [partition], nil, :in)
   end
 
   @doc """
@@ -2866,57 +2886,8 @@ defmodule Graph do
     [partition]
   end
 
-  defp out_edges_in_partitions(
-         %__MODULE__{
-           vertices: vs,
-           edges: edges,
-           out_edges: oe,
-           multigraph: true,
-           edge_index: edge_index,
-           vertex_identifier: vertex_identifier,
-           partition_by: partition_by,
-           edge_properties: ep
-         },
-         v,
-         partitions,
-         where_fun
-       ) do
-    v1_id = vertex_identifier.(v)
-
-    out_edges_set =
-      oe
-      |> Map.get(v1_id, MapSet.new())
-      |> MapSet.new(fn v2_id ->
-        {v1_id, v2_id}
-      end)
-
-    out_edge_adjacency_set =
-      partitions
-      |> Enum.reduce(MapSet.new(), fn partition, acc ->
-        edge_index
-        |> Map.get(partition, %{})
-        |> Map.get(v1_id, MapSet.new())
-        |> MapSet.union(acc)
-      end)
-      |> MapSet.intersection(out_edges_set)
-
-    Enum.flat_map(out_edge_adjacency_set, fn {_v1_id, v2_id} = edge_key ->
-      v2 = Map.get(vs, v2_id)
-
-      edges
-      |> Map.get(edge_key, [])
-      |> Enum.reduce([], fn {label, weight}, acc ->
-        props = get_edge_props(ep, edge_key, label)
-        edge = Edge.new(v, v2, label: label, weight: weight, properties: props)
-        edges_in_partitions = partition_by.(edge)
-
-        if include_edge_for_filtered_partitions?(edge, edges_in_partitions, partitions, where_fun) do
-          [edge | acc]
-        else
-          acc
-        end
-      end)
-    end)
+  defp out_edges_in_partitions(g, v, partitions, where_fun) do
+    incident_edges_in_partitions(g, v, partitions, where_fun, :out)
   end
 
   defp include_edge_for_filtered_partitions?(_edge, edge_partitions, partitions, nil = _where_fun) do

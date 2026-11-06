@@ -108,7 +108,12 @@ defmodule Graph.Utils do
   end
 
   def edge_weight(
-        %Graph{type: :directed, edges: meta, partition_by: partition_by, edge_properties: ep},
+        %Graph{
+          type: :directed,
+          edges: meta,
+          partition_by: partition_by,
+          edge_properties: ep
+        },
         a,
         b,
         partitions
@@ -123,7 +128,12 @@ defmodule Graph.Utils do
   end
 
   def edge_weight(
-        %Graph{type: :undirected, edges: meta, partition_by: partition_by, edge_properties: ep},
+        %Graph{
+          type: :undirected,
+          edges: meta,
+          partition_by: partition_by,
+          edge_properties: ep
+        },
         a,
         b,
         partitions

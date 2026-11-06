@@ -1,4 +1,4 @@
-defmodule Graph.Multigraph.Model.Test do
+defmodule Graph.GraphModelTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
@@ -6,7 +6,7 @@ defmodule Graph.Multigraph.Model.Test do
 
   @labels [:foo, :bar, :baz, :qux, nil]
 
-  property "edge_index is complete: every edge is indexed under its partitions" do
+  test "edge_index is complete: every edge is indexed under its partitions" do
     check all(g <- multigraph(), max_runs: 500) do
       for edge <- Graph.edges(g) do
         partitions = g.partition_by.(edge)
@@ -29,7 +29,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "edge_index is sound: every indexed edge_key exists in edges" do
+  test "edge_index is sound: every indexed edge_key exists in edges" do
     check all(g <- multigraph(), max_runs: 500) do
       for {_partition, vertex_map} <- g.edge_index,
           {_v_id, edge_keys} <- vertex_map,
@@ -40,7 +40,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "partition filter returns exactly matching edges" do
+  test "partition filter returns exactly matching edges" do
     check all(g <- multigraph(), max_runs: 500) do
       for label <- @labels do
         indexed = Graph.edges(g, by: [label])
@@ -58,7 +58,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "index invariant holds after delete_edge" do
+  test "index invariant holds after delete_edge" do
     check all(
             g <- multigraph(min_edges: 2),
             max_runs: 500
@@ -71,7 +71,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "index invariant holds after delete_vertex" do
+  test "index invariant holds after delete_vertex" do
     check all(
             g <- multigraph(min_vertices: 2),
             max_runs: 500
@@ -84,7 +84,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "index invariant holds after update_labelled_edge with new label" do
+  test "index invariant holds after update_labelled_edge with new label" do
     check all(
             g <- multigraph(min_edges: 1),
             max_runs: 500
@@ -103,7 +103,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "index invariant holds after transpose" do
+  test "index invariant holds after transpose" do
     check all(g <- multigraph(), max_runs: 500) do
       gt = Graph.transpose(g)
 
@@ -112,7 +112,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "subgraph preserves multigraph and index correctness" do
+  test "subgraph preserves multigraph and index correctness" do
     check all(
             g <- multigraph(min_vertices: 2),
             max_runs: 500
@@ -127,7 +127,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "adding the same edge twice does not create duplicate index entries" do
+  test "adding the same edge twice does not create duplicate index entries" do
     check all(g <- multigraph(), max_runs: 500) do
       for {_partition, vertex_map} <- g.edge_index,
           {_v_id, edge_keys} <- vertex_map do
@@ -137,7 +137,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "non-multigraph queries are equivalent to multigraph queries" do
+  test "non-multigraph queries are equivalent to multigraph queries" do
     check all(g <- multigraph(), max_runs: 500) do
       plain =
         g
@@ -155,7 +155,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "index invariant holds after a sequence of mutations" do
+  test "index invariant holds after a sequence of mutations" do
     check all(
             g <- multigraph(min_vertices: 3, min_edges: 3),
             mutations <- list_of(mutation_gen(), min_length: 1, max_length: 10),
@@ -171,7 +171,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "index invariant holds after split_edge" do
+  test "index invariant holds after split_edge" do
     check all(
             g <- multigraph(min_edges: 1),
             max_runs: 500
@@ -195,7 +195,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "BFS with partition filter visits subset of unfiltered BFS" do
+  test "BFS with partition filter visits subset of unfiltered BFS" do
     check all(g <- multigraph(min_edges: 2), max_runs: 500) do
       all_visited = MapSet.new(Graph.Reducers.Bfs.map(g, fn v -> v end))
 
@@ -206,7 +206,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "DFS with partition filter visits subset of unfiltered vertices" do
+  test "DFS with partition filter visits subset of unfiltered vertices" do
     check all(g <- multigraph(min_edges: 2), max_runs: 500) do
       all_vertices = MapSet.new(Graph.vertices(g))
 
@@ -217,7 +217,7 @@ defmodule Graph.Multigraph.Model.Test do
     end
   end
 
-  property "Dijkstra with partition filter returns path using only filtered edges" do
+  test "Dijkstra with partition filter returns path using only filtered edges" do
     check all(g <- multigraph(min_edges: 2), max_runs: 300) do
       vertices = Graph.vertices(g)
 
