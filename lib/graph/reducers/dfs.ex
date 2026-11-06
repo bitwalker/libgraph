@@ -20,7 +20,11 @@ defmodule Graph.Reducers.Dfs do
       [1, 3, 2, 4]
   """
   def map(g, fun) when is_function(fun, 1) do
-    reduce(g, [], fn v, results -> {:next, [fun.(v) | results]} end)
+    map(g, fun, [])
+  end
+
+  def map(g, fun, opts) when is_function(fun, 1) and is_list(opts) do
+    reduce(g, [], fn v, results -> {:next, [fun.(v) | results]} end, opts)
     |> Enum.reverse()
   end
 
@@ -49,15 +53,75 @@ defmodule Graph.Reducers.Dfs do
       ...> #{__MODULE__}.reduce(g, [], fn 4, acc -> {:halt, acc}; v, acc -> {:next, [v|acc]} end)
       [2, 3, 1]
   """
-  def reduce(%Graph{vertices: vs} = g, acc, fun) when is_function(fun, 2) do
-    traverse(Map.keys(vs), g, MapSet.new(), fun, acc)
+  def reduce(%Graph{} = g, acc, fun) when is_function(fun, 2) do
+    reduce(g, acc, fun, [])
+  end
+
+  def reduce(%Graph{vertices: vs} = g, acc, fun, opts)
+      when is_function(fun, 2) and is_list(opts) do
+    partitions = partitions_from_opts(opts)
+
+    start_ids =
+      if partitions do
+        Enum.reject(Map.keys(vs), fn id -> inbound_edges?(g, id) end)
+      else
+        Map.keys(vs)
+      end
+
+    traverse(start_ids, g, MapSet.new(), fun, acc, partitions)
+  end
+
+  defp partitions_from_opts(opts) do
+    case Keyword.fetch(opts, :by) do
+      {:ok, by} when is_list(by) -> by
+      {:ok, by} -> [by]
+      :error -> nil
+    end
+  end
+
+  defp inbound_edges?(%Graph{in_edges: ie}, v_id) do
+    case Map.get(ie, v_id) do
+      nil -> false
+      edges -> MapSet.size(edges) > 0
+    end
+  end
+
+  defp out_neighbors(%Graph{out_edges: oe}, v_id, nil) do
+    oe
+    |> Map.get(v_id, MapSet.new())
+    |> MapSet.to_list()
+  end
+
+  defp out_neighbors(%Graph{out_edges: oe, edge_index: edge_index}, v_id, partitions) do
+    out_set = Map.get(oe, v_id, MapSet.new())
+
+    partitions
+    |> Enum.reduce(MapSet.new(), fn partition, acc ->
+      edge_index
+      |> Map.get(partition, %{})
+      |> Map.get(v_id, MapSet.new())
+      |> Enum.reduce(acc, fn
+        {^v_id, v2_id}, acc -> MapSet.put(acc, v2_id)
+        _, acc -> acc
+      end)
+    end)
+    |> MapSet.intersection(out_set)
+    |> MapSet.to_list()
+  end
+
+  defp edge_weight_for(g, v_id, id, nil) do
+    Graph.Utils.edge_weight(g, v_id, id)
+  end
+
+  defp edge_weight_for(g, v_id, id, partitions) do
+    Graph.Utils.edge_weight(g, v_id, id, partitions)
   end
 
   ## Private
 
-  defp traverse([v_id | rest], %Graph{out_edges: oe, vertices: vs} = g, visited, fun, acc) do
+  defp traverse([v_id | rest], %Graph{vertices: vs} = g, visited, fun, acc, partitions) do
     if MapSet.member?(visited, v_id) do
-      traverse(rest, g, visited, fun, acc)
+      traverse(rest, g, visited, fun, acc, partitions)
     else
       v = Map.get(vs, v_id)
 
@@ -66,17 +130,15 @@ defmodule Graph.Reducers.Dfs do
           visited = MapSet.put(visited, v_id)
 
           out =
-            oe
-            |> Map.get(v_id, MapSet.new())
-            |> MapSet.to_list()
-            |> Enum.sort_by(fn id -> Graph.Utils.edge_weight(g, v_id, id) end)
+            out_neighbors(g, v_id, partitions)
+            |> Enum.sort_by(fn id -> edge_weight_for(g, v_id, id, partitions) end)
 
-          traverse(out ++ rest, g, visited, fun, acc2)
+          traverse(out ++ rest, g, visited, fun, acc2, partitions)
 
         {:skip, acc2} ->
           # Skip this vertex and it's out-neighbors
           visited = MapSet.put(visited, v_id)
-          traverse(rest, g, visited, fun, acc2)
+          traverse(rest, g, visited, fun, acc2, partitions)
 
         {:halt, acc2} ->
           acc2
@@ -84,7 +146,7 @@ defmodule Graph.Reducers.Dfs do
     end
   end
 
-  defp traverse([], _g, _visited, _fun, acc) do
+  defp traverse([], _g, _visited, _fun, acc, _partitions) do
     acc
   end
 end

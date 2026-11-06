@@ -18,9 +18,13 @@ defmodule Graph.Mixfile do
 
   def cli do
     [
-      preferred_cli_env: [
+      preferred_envs: [
         docs: :dev,
-        bench: :bench
+        bench: :bench,
+        "bench.multigraph": :bench,
+        "bench.multigraph_creation": :bench,
+        "bench.multigraph_memory": :bench,
+        "bench.partition_indexes": :bench
       ]
     ]
   end
@@ -67,7 +71,11 @@ defmodule Graph.Mixfile do
       "bench.create": ["run bench/create.exs"],
       "bench.k_core": ["run bench/k_core.exs"],
       "bench.shortest_path": ["run bench/shortest_path.exs"],
-      "bench.topsort": ["run bench/topsort.exs"]
+      "bench.topsort": ["run bench/topsort.exs"],
+      "bench.multigraph": ["run bench/multigraph.exs"],
+      "bench.multigraph_creation": ["run bench/multigraph_creation.exs"],
+      "bench.multigraph_memory": ["run bench/multigraph_memory.exs"],
+      "bench.partition_indexes": ["run bench/partition_indexes.exs"]
     ]
   end
 

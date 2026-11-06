@@ -16,7 +16,11 @@ defmodule Graph.Reducer do
   """
 
   @callback map(g :: Graph.t(), mapper :: (Graph.vertex() -> term)) :: term
-  @callback reduce(g :: Graph.t(), acc :: term, reducer :: (Graph.vertex(), term -> term)) ::
+  @callback reduce(
+              g :: Graph.t(),
+              acc :: term,
+              reducer :: (Graph.vertex(), term -> term)
+            ) ::
               {:next, term}
               | {:halt, term}
 

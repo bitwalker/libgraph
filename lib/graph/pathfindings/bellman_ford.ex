@@ -11,11 +11,27 @@ defmodule Graph.Pathfindings.BellmanFord do
   @doc """
   Returns nil when graph has negative cycle.
   """
-  @spec call(Graph.t(), Graph.vertex()) :: %{Graph.vertex() => number() | :infinity} | nil
-  def call(%Graph{vertices: vs, edges: meta} = g, a) do
+  @spec call(Graph.t(), Graph.vertex()) ::
+          %{Graph.vertex() => number() | :infinity} | nil
+  def call(%Graph{} = g, a), do: do_call(g, a, nil)
+
+  def call(%Graph{} = g, a, opts) when is_list(opts) do
+    partitions = partitions_from_opts(opts)
+    do_call(g, a, partitions)
+  end
+
+  defp partitions_from_opts(opts) do
+    case Keyword.fetch(opts, :by) do
+      {:ok, by} when is_list(by) -> by
+      {:ok, by} -> [by]
+      :error -> nil
+    end
+  end
+
+  defp do_call(%Graph{vertices: vs, edges: meta} = g, a, partitions) do
     distances = a |> g.vertex_identifier.() |> init_distances(vs)
 
-    weights = Enum.map(meta, &edge_weight/1)
+    weights = edges_with_weights(meta, g, partitions)
 
     distances =
       for _ <- 1..map_size(vs),
@@ -29,6 +45,33 @@ defmodule Graph.Pathfindings.BellmanFord do
     else
       Map.new(distances, fn {k, v} -> {Map.fetch!(g.vertices, k), v} end)
     end
+  end
+
+  defp edges_with_weights(meta, _g, nil) do
+    Enum.map(meta, &edge_weight/1)
+  end
+
+  defp edges_with_weights(
+         meta,
+         %Graph{partition_by: partition_by, edge_properties: ep},
+         partitions
+       ) do
+    Enum.flat_map(meta, fn {edge_key, edge_value} ->
+      edge_value
+      |> Enum.filter(fn {label, weight} ->
+        props =
+          case ep do
+            %{^edge_key => %{^label => p}} -> p
+            _ -> %{}
+          end
+
+        eps = partition_by.(%{label: label, weight: weight, properties: props})
+        Enum.any?(eps, fn ep -> ep in partitions end)
+      end)
+      |> Enum.map(fn {_label, weight} ->
+        {edge_key, weight}
+      end)
+    end)
   end
 
   @spec init_distances(Graph.vertex(), Graph.vertices()) :: distance
