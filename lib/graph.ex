@@ -2987,11 +2987,6 @@ defmodule Graph do
     Enum.any?(edge_partitions, fn ep -> ep in partitions and where_fun.(edge) end)
   end
 
-  defp include_edge_for_filtered_partitions?(edge, _edge_partition, _partitions, where_fun)
-       when is_function(where_fun) do
-    where_fun.(edge)
-  end
-
   @doc """
   Builds a maximal subgraph of `g` which includes all of the vertices in `vs` and the edges which connect them.
 
