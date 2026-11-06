@@ -3,16 +3,16 @@ defmodule Graph.Pathfindings.BellmanFord do
   The Bellman–Ford algorithm is an algorithm that computes shortest paths from a single
   source vertex to all of the other vertices in a weighted digraph.
   It is capable of handling graphs in which some of the edge weights are negative numbers
-  Time complexity: O(VLogV)
+  Time complexity: O(VE)
   """
 
-  @typep distance() :: %{Graph.vertex_id() => integer()}
+  @typep distance() :: %{Graph.vertex_id() => number() | :infinity}
 
   @doc """
   Returns nil when graph has negative cycle.
   """
   @spec call(Graph.t(), Graph.vertex()) ::
-          %{Graph.vertex() => integer() | :infinity} | nil
+          %{Graph.vertex() => number() | :infinity} | nil
   def call(%Graph{} = g, a), do: do_call(g, a, nil)
 
   def call(%Graph{} = g, a, opts) when is_list(opts) do
@@ -29,7 +29,7 @@ defmodule Graph.Pathfindings.BellmanFord do
   end
 
   defp do_call(%Graph{vertices: vs, edges: meta} = g, a, partitions) do
-    distances = a |> Graph.Utils.vertex_id() |> init_distances(vs)
+    distances = a |> g.vertex_identifier.() |> init_distances(vs)
 
     weights = edges_with_weights(meta, g, partitions)
 
@@ -77,7 +77,7 @@ defmodule Graph.Pathfindings.BellmanFord do
   @spec init_distances(Graph.vertex(), Graph.vertices()) :: distance
   defp init_distances(vertex_id, vertices) do
     Map.new(vertices, fn
-      {id, _vertex} when id == vertex_id -> {id, 0}
+      {id, _vertex} when id === vertex_id -> {id, 0}
       {id, _} -> {id, :infinity}
     end)
   end
@@ -93,9 +93,8 @@ defmodule Graph.Pathfindings.BellmanFord do
     end
   end
 
-  @spec edge_weight(term) :: float
-  defp edge_weight({e, edge_value}),
-    do: {e, edge_value |> Map.values() |> List.first()}
+  @spec edge_weight(term) :: {Graph.edge_key(), number()}
+  defp edge_weight({e, edge_value}), do: {e, edge_value |> Map.values() |> Enum.min()}
 
   defp has_negative_cycle?(distances, meta) do
     Enum.any?(meta, fn {{u, v}, weight} ->

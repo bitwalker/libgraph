@@ -5,7 +5,6 @@
 # A single relabel starts from the same immutable graph on every repetition.
 # consume_all changes n distinct edges and retains the resulting history.
 defmodule Graph.Bench.PartitionIndexes do
-  alias Graph, as: Graph
 
   @queries 500
 

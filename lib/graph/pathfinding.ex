@@ -57,19 +57,15 @@ defmodule Graph.Pathfinding do
 
   @doc """
   Finds all paths between `a` and `b`, each path as a list of vertices.
-  Returns `nil` if no path can be found.
+  Returns `[]` if no path can be found. Results are eager and their number can
+  grow exponentially; see `Graph.get_paths/3` for usage and complexity guidance.
   """
-  @spec all(Graph.t(), Graph.vertex(), Graph.vertex()) ::
-          [[Graph.vertex()]] | nil
-  def all(
-        %Graph{vertices: vs, out_edges: oe, vertex_identifier: vertex_identifier} = g,
-        a,
-        b
-      ) do
+  @spec all(Graph.t(), Graph.vertex(), Graph.vertex()) :: [[Graph.vertex()]]
+  def all(%Graph{vertices: vs, out_edges: oe, vertex_identifier: vertex_identifier} = g, a, b) do
     with a_id <- vertex_identifier.(a),
          b_id <- vertex_identifier.(b),
          {:ok, a_out} <- Map.fetch(oe, a_id) do
-      case dfs(g, a_out, b_id, [a_id], []) do
+      case dfs(g, a_out, b_id, [a_id], MapSet.new([a_id]), []) do
         [] ->
           []
 
@@ -104,7 +100,7 @@ defmodule Graph.Pathfinding do
     a_out = get_out_neighbors(g, a_id, partitions)
 
     if a_out do
-      tree = Graph.new(vertex_identifier: vertex_identifier) |> Graph.add_vertex(a_id)
+      tree = %{a_id => a_id}
       q = PriorityQueue.new()
 
       q =
@@ -140,7 +136,7 @@ defmodule Graph.Pathfinding do
     a_id = vertex_identifier.(a)
     b_id = vertex_identifier.(b)
     a_neighbors = get_all_neighbors(g, a_id, partitions)
-    tree = Graph.new(vertex_identifier: vertex_identifier) |> Graph.add_vertex(a_id)
+    tree = %{a_id => a_id}
     q = PriorityQueue.new()
 
     q =
@@ -241,21 +237,18 @@ defmodule Graph.Pathfinding do
 
   defp do_bfs(
          q,
-         %Graph{type: :directed, vertex_identifier: vertex_identifier} = g,
+         %Graph{type: :directed} = g,
          target_id,
-         %Graph{vertices: vs_tree} = tree,
+         tree,
          hfun,
          partitions
        ) do
     case PriorityQueue.pop(q) do
       {{:value, {v_id, ^target_id, _}}, _q1} ->
-        v_id_tree = vertex_identifier.(v_id)
-        construct_path(v_id_tree, tree, [target_id])
+        construct_path(v_id, tree, [target_id])
 
       {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
-        v2_id_tree = vertex_identifier.(v2_id)
-
-        if Map.has_key?(vs_tree, v2_id_tree) do
+        if Map.has_key?(tree, v2_id) do
           do_bfs(q1, g, target_id, tree, hfun, partitions)
         else
           case get_out_neighbors(g, v2_id, partitions) do
@@ -263,10 +256,7 @@ defmodule Graph.Pathfinding do
               do_bfs(q1, g, target_id, tree, hfun, partitions)
 
             v2_out ->
-              tree =
-                tree
-                |> Graph.add_vertex(v2_id)
-                |> Graph.add_edge(v2_id, v1_id)
+              tree = Map.put(tree, v2_id, v1_id)
 
               q2 =
                 v2_out
@@ -292,21 +282,18 @@ defmodule Graph.Pathfinding do
 
   defp do_bfs(
          q,
-         %Graph{type: :undirected, vertex_identifier: vertex_identifier} = g,
+         %Graph{type: :undirected} = g,
          target_id,
-         %Graph{vertices: vs_tree} = tree,
+         tree,
          hfun,
          partitions
        ) do
     case PriorityQueue.pop(q) do
       {{:value, {v_id, ^target_id, _}}, _q1} ->
-        v_id_tree = vertex_identifier.(v_id)
-        construct_path(v_id_tree, tree, [target_id])
+        construct_path(v_id, tree, [target_id])
 
       {{:value, {v1_id, v2_id, v2_acc_weight}}, q1} ->
-        v2_id_tree = vertex_identifier.(v2_id)
-
-        if Map.has_key?(vs_tree, v2_id_tree) do
+        if Map.has_key?(tree, v2_id) do
           do_bfs(q1, g, target_id, tree, hfun, partitions)
         else
           neighbors = get_all_neighbors(g, v2_id, partitions)
@@ -314,10 +301,7 @@ defmodule Graph.Pathfinding do
           if MapSet.equal?(neighbors, MapSet.new()) do
             do_bfs(q1, g, target_id, tree, hfun, partitions)
           else
-            tree =
-              tree
-              |> Graph.add_vertex(v2_id)
-              |> Graph.add_edge(v2_id, v1_id)
+            tree = Map.put(tree, v2_id, v1_id)
 
             q2 =
               neighbors
@@ -341,32 +325,26 @@ defmodule Graph.Pathfinding do
     end
   end
 
-  defp construct_path(v_id_tree, %Graph{vertices: vs_tree, out_edges: oe_tree} = tree, path) do
-    v_id_actual = Map.get(vs_tree, v_id_tree)
-    path = [v_id_actual | path]
-
-    case oe_tree |> Map.get(v_id_tree, MapSet.new()) |> MapSet.to_list() do
-      [] ->
-        path
-
-      [next_id_tree] ->
-        construct_path(next_id_tree, tree, path)
+  defp construct_path(id, tree, path) do
+    case Map.fetch!(tree, id) do
+      ^id -> [id | path]
+      parent -> construct_path(parent, tree, [id | path])
     end
   end
 
-  defp dfs(%Graph{} = g, neighbors, target_id, path, paths) when is_list(paths) do
-    {paths, visited} =
+  defp dfs(%Graph{} = g, neighbors, target_id, path, visited, paths) when is_list(paths) do
+    {paths, excluded} =
       if MapSet.member?(neighbors, target_id) do
-        {[Enum.reverse([target_id | path]) | paths], [target_id | path]}
+        {[Enum.reverse([target_id | path]) | paths], MapSet.put(visited, target_id)}
       else
-        {paths, path}
+        {paths, visited}
       end
 
-    neighbors = MapSet.difference(neighbors, MapSet.new(visited))
-    do_dfs(g, MapSet.to_list(neighbors), target_id, path, paths)
+    neighbors = MapSet.difference(neighbors, excluded)
+    do_dfs(g, MapSet.to_list(neighbors), target_id, path, visited, paths)
   end
 
-  defp do_dfs(_g, [], _target_id, _path, paths) when is_list(paths) do
+  defp do_dfs(_g, [], _target_id, _path, _visited, paths) when is_list(paths) do
     paths
   end
 
@@ -375,20 +353,25 @@ defmodule Graph.Pathfinding do
          [next_neighbor_id | neighbors],
          target_id,
          path,
+         visited,
          acc
        ) do
     case Map.get(oe, next_neighbor_id) do
       nil ->
-        do_dfs(g, neighbors, target_id, path, acc)
+        do_dfs(g, neighbors, target_id, path, visited, acc)
 
       next_neighbors ->
-        case dfs(g, next_neighbors, target_id, [next_neighbor_id | path], acc) do
-          [] ->
-            do_dfs(g, neighbors, target_id, path, acc)
+        paths =
+          dfs(
+            g,
+            next_neighbors,
+            target_id,
+            [next_neighbor_id | path],
+            MapSet.put(visited, next_neighbor_id),
+            acc
+          )
 
-          paths ->
-            do_dfs(g, neighbors, target_id, path, paths)
-        end
+        do_dfs(g, neighbors, target_id, path, visited, paths)
     end
   end
 end

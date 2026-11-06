@@ -138,8 +138,8 @@ defmodule Graph.Utils do
         b,
         partitions
       ) do
-    edge_key = {a, b}
-    edge_meta = Map.get(meta, edge_key) || Map.get(meta, {b, a})
+    edge_key = if Map.has_key?(meta, {a, b}), do: {a, b}, else: {b, a}
+    edge_meta = Map.get(meta, edge_key)
 
     case edge_meta do
       nil ->

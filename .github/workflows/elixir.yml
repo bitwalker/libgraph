@@ -2,30 +2,95 @@ name: elixir
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
-        include: 
-          - elixir: 1.14.5
-            otp: 24.3
-
-          - elixir: 1.15.8
-            otp: 25.3
-
-          - elixir: 1.16.3
-            otp: 26.2
-
-          - elixir: 1.18.2
-            otp: 27.2
+        include:
+          - elixir: '1.13.4'
+            otp: '24.3.4.17'
+          - elixir: '1.16.3'
+            otp: '26.2.5.21'
+          - elixir: '1.18.4'
+            otp: '27.3.4.19'
+          - elixir: '1.20.5'
+            otp: '29.1.2'
+    env:
+      MIX_ENV: test
     steps:
-      - uses: actions/checkout@v2
-      - uses: erlef/setup-beam@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          otp-version: ${{matrix.otp}}
-          elixir-version: ${{matrix.elixir}}
-      - run: mix deps.get
+          persist-credentials: false
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+          version-type: strict
+      - run: mix local.hex --force
+      - name: Fetch locked dependencies
+        run: |
+          sha256sum mix.lock > /tmp/mix.lock.sha256
+          mix deps.get
+          sha256sum --check /tmp/mix.lock.sha256
+      - run: mix compile --warnings-as-errors
       - run: mix test
+
+  minimum:
+    name: Elixir 1.10 / OTP 23 (minimum supported)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test the supported floor
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/hex.ez" https://builds.hex.pm/installs/1.10.0/hex-2.2.1.ez
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --env MIX_ENV=test --env MIX_HOME=/tmp/mix --env HEX_HOME=/tmp/hex \
+            --volume "$PWD:/workspace" --volume "$RUNNER_TEMP/hex.ez:/tmp/hex.ez:ro" --workdir /workspace \
+            hexpm/elixir:1.10.4-erlang-23.3.4.20-debian-bullseye-20260610@sha256:9a8c673a5bea37c3161ae32339d0e4db3c80624f9b94c2a9701b5072685b2b55 \
+            sh -eu -c '
+              mix archive.install /tmp/hex.ez --force --sha512 a250a416277c11a177def1bf1dba6b546d609d3bc3c87a4f081f5766cfc56cce4f1af11d2b3858c055f0c01616566abf8fcca8f04e2afb92d17a54391890de17
+              sha256sum mix.lock > /tmp/mix.lock.sha256
+              mix deps.get
+              sha256sum --check /tmp/mix.lock.sha256
+              mix compile --warnings-as-errors
+              mix test
+            '
+
+  quality:
+    name: Format, types, documentation, and package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: '27.3.4.19'
+          elixir-version: '1.18.4'
+          version-type: strict
+      - run: mix local.hex --force
+      - run: mix deps.get --check-locked
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      - run: mix dialyzer
+      - run: mix docs
+      - run: mix hex.build --unpack

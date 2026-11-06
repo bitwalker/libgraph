@@ -57,7 +57,7 @@ defmodule Graph.Directed do
 
   def postorder(%Graph{vertices: vs} = g) do
     g
-    |> reverse_postorder()
+    |> reverse_postorder(traversal_neighbors(g, :out))
     |> Stream.map(fn id -> Map.get(vs, id) end)
     |> Enum.reverse()
   end
@@ -115,6 +115,8 @@ defmodule Graph.Directed do
     end
   end
 
+  def strong_components(%Graph{type: :undirected} = g), do: components(g)
+
   def strong_components(%Graph{vertices: vs} = g) do
     for component <- forest(g, &in_neighbors/3, reverse_postorder(g)) do
       for id <- component, do: Map.get(vs, id)
@@ -124,7 +126,9 @@ defmodule Graph.Directed do
   def reachable(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :first)), do: Map.get(vertices, id)
+
+    for id <- :lists.append(forest(g, traversal_neighbors(g, :out), vs, :first)),
+        do: Map.get(vertices, id)
   end
 
   def reachable_neighbors(
@@ -134,23 +138,24 @@ defmodule Graph.Directed do
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
 
-    for id <- :lists.append(forest(g, &out_neighbors/3, vs, :not_first)),
+    for id <- :lists.append(forest(g, traversal_neighbors(g, :out), vs, :not_first)),
         do: Map.get(vertices, id)
   end
 
   def reaching(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
-    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :first)), do: Map.get(vertices, id)
+
+    for id <- :lists.append(forest(g, traversal_neighbors(g, :in), vs, :first)),
+        do: Map.get(vertices, id)
   end
 
-  def reaching_neighbors(
-        %Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g,
-        vs
-      )
+  def reaching_neighbors(%Graph{vertices: vertices, vertex_identifier: vertex_identifier} = g, vs)
       when is_list(vs) do
     vs = Enum.map(vs, vertex_identifier)
-    for id <- :lists.append(forest(g, &in_neighbors/3, vs, :not_first)), do: Map.get(vertices, id)
+
+    for id <- :lists.append(forest(g, traversal_neighbors(g, :in), vs, :not_first)),
+        do: Map.get(vertices, id)
   end
 
   def in_neighbors(%Graph{} = g, v, []) do
@@ -188,6 +193,10 @@ defmodule Graph.Directed do
       v_out -> MapSet.to_list(v_out)
     end
   end
+
+  defp traversal_neighbors(%Graph{type: :undirected}, _direction), do: &inout/3
+  defp traversal_neighbors(_g, :out), do: &out_neighbors/3
+  defp traversal_neighbors(_g, :in), do: &in_neighbors/3
 
   ## Private
 
@@ -237,28 +246,30 @@ defmodule Graph.Directed do
   defp ptraverse([], _fun, _g, visited, results, acc), do: {visited, [results | acc]}
 
   defp reverse_preorder(g) do
-    :lists.append(forest(g, &out_neighbors/3))
+    :lists.append(forest(g, traversal_neighbors(g, :out)))
   end
 
-  defp reverse_postorder(%Graph{vertices: vs} = g) do
-    {_, l} = posttraverse(Map.keys(vs), g, MapSet.new(), [])
+  defp reverse_postorder(g), do: reverse_postorder(g, &out_neighbors/3)
+
+  defp reverse_postorder(%Graph{vertices: vs} = g, fun) do
+    {_, l} = posttraverse(Map.keys(vs), fun, g, MapSet.new(), [])
     l
   end
 
-  defp posttraverse([v | vs], g, visited, acc) do
+  defp posttraverse([v | vs], fun, g, visited, acc) do
     {visited, acc} =
       if MapSet.member?(visited, v) do
         {visited, acc}
       else
         visited = MapSet.put(visited, v)
-        {visited2, acc2} = posttraverse(out_neighbors(g, v, []), g, visited, acc)
+        {visited2, acc2} = posttraverse(fun.(g, v, []), fun, g, visited, acc)
         {visited2, [v | acc2]}
       end
 
-    posttraverse(vs, g, visited, acc)
+    posttraverse(vs, fun, g, visited, acc)
   end
 
-  defp posttraverse([], _g, visited, acc), do: {visited, acc}
+  defp posttraverse([], _fun, _g, visited, acc), do: {visited, acc}
 
   defp inout(g, v, vs) do
     in_neighbors(g, v, out_neighbors(g, v, vs))

@@ -513,6 +513,14 @@ defmodule GraphTest do
     assert "#Graph<type: directed, num_vertices: 151, num_edges: 150>" = str
   end
 
+  test "inspect ordering is independent of internal vertex identifiers" do
+    edges = for v <- 1..40, label <- [nil, :tag], do: {v, v + 1, label: label}
+    first = Graph.new(vertex_identifier: fn v -> v end) |> Graph.add_edges(edges)
+    second = Graph.new(vertex_identifier: fn v -> -v end) |> Graph.add_edges(edges)
+
+    assert inspect(first, limit: :infinity) == inspect(second, limit: :infinity)
+  end
+
   test "get info about graph" do
     g = build_basic_cyclic_graph()
     assert %{type: :directed, num_vertices: 5, num_edges: 7} = Graph.info(g)
@@ -780,7 +788,7 @@ defmodule GraphTest do
       ])
 
     cliques = Graph.cliques(g) |> Enum.map(&Enum.sort/1) |> Enum.sort()
-    assert cliques == [[:a, :b, :e], [:b, :c], [:c, :d], [:d, :e], [:d, :f]]
+    assert [[:a, :b, :e], [:b, :c], [:c, :d], [:d, :e], [:d, :f]] = cliques
   end
 
   test "k_cliques/2" do
@@ -908,9 +916,11 @@ defmodule GraphTest do
         {:f, :h}
       ])
 
-    components = Graph.k_core_components(g)
-    assert Enum.sort(components[0]) == [:i]
-    assert Enum.sort(components[1]) == [:e, :f, :g, :h]
+    components =
+      Map.new(Graph.k_core_components(g), fn {k, vertices} -> {k, Enum.sort(vertices)} end)
+
+    assert [:i] = components[0]
+    assert [:e, :f, :g, :h] = components[1]
     assert is_nil(components[2])
     assert Enum.sort(components[3]) == [:a, :b, :c, :d]
   end

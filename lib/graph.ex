@@ -25,14 +25,16 @@ defmodule Graph do
   edge can be done with very little effort. We use vertex ids everywhere because we can generate them without any lookups,
   we don't incur any copies of the vertex structure, and they are very efficient as keys in a map.
 
-  ## Graphs
+  ## Multigraphs
 
   When `multigraph: true` is passed to `Graph.new/1`, an edge adjacency index (`edge_index`) is maintained
   alongside the standard graph structure. This index partitions edges by a key derived from a `partition_by`
-  function (defaulting to `Graph.Utils.by_edge_label/1`, which partitions by edge label).
+  function (defaulting to `fn edge -> [edge.label] end`, which partitions by edge label).
 
-  The index structure is `%{partition_key => %{vertex_id => MapSet.t(edge_key)}}`, enabling O(1) map-access
-  retrieval of edges by partition, avoiding O(E) scans over all edges.
+  The index structure is `%{partition_key => %{vertex_id => MapSet.t(edge_key)}}`.
+  Partition queries start from indexed endpoint pairs instead of scanning unrelated edges.
+  Query cost still depends on the selected pairs and their parallel labels; the index adds
+  storage and maintenance work when edges change.
 
   Query functions such as `edges/2`, `out_edges/3`, and `in_edges/3` accept `:by` and `:where` options
   to filter edges by partition or predicate. Traversal and pathfinding algorithms (`Graph.Reducers.Bfs`,
@@ -59,7 +61,8 @@ defmodule Graph do
   alias Graph.{Edge, EdgeSpecificationError}
 
   @typedoc """
-  Identifier of a vertex. By default a non_neg_integer from `Graph.Utils.vertex_id/1` utilizing `:erlang.phash2`.
+  Identifier of a vertex. Defaults to a 32-bit hash from `:erlang.phash2/2`,
+  which is not guaranteed to be unique. See `new/1` for identifier options.
   """
   @type vertex_id :: non_neg_integer() | term()
   @type vertex :: term
@@ -74,7 +77,8 @@ defmodule Graph do
           in_edges: %{vertex_id => MapSet.t()},
           out_edges: %{vertex_id => MapSet.t()},
           edges: %{edge_key => edge_value},
-          edge_index: %{edge_index_key => MapSet.t()},
+          edge_index: %{edge_index_key => %{vertex_id => MapSet.t(edge_key)}},
+          edge_properties: %{edge_key => %{label => map()}},
           vertex_labels: %{vertex_id => term},
           vertices: %{vertex_id => vertex},
           type: graph_type,
@@ -96,20 +100,38 @@ defmodule Graph do
 
   - `type: :directed | :undirected`, specifies what type of graph this is. Defaults to a `:directed` graph.
   - `vertex_identifier`: a function which accepts a vertex and returns a unique identifier of said vertex.
-    Defaults to `Graph.Utils.vertex_id/1`, a hash of the whole vertex utilizing `:erlang.phash2/2`.
+    Defaults to a 32-bit `:erlang.phash2/2` hash of the whole vertex.
   - `multigraph: true | false`, enables edge indexing for efficient partition-based edge retrieval.
       - When `true`, an `edge_index` is maintained that maps partition keys to sets of edge keys.
       - When `false` (default), no additional memory is used for the index.
   - `partition_by`: a function which accepts an `%Edge{}` and returns a list of unique identifiers used as the partition keys.
-    Defaults to `Graph.Utils.by_edge_label/1`, which partitions edges by the label when multigraphs are enabled.
+    Defaults to `fn edge -> [edge.label] end`, which partitions edges by the label when multigraphs are enabled.
 
-  ### Graph Edge Indexing
+  ### Multigraph Edge Indexing
 
   When `multigraph: true` is enabled the `partition_by` function maintains sets of edges for the partition.
-  This option enables a space for time trade-off for Map access retrieval partitioned edges of a kind i.e. [multigraph](https://en.wikipedia.org/wiki/Graph) capabilities.
+  This option enables a space for time trade-off for Map access retrieval partitioned edges of a kind i.e. [multigraph](https://en.wikipedia.org/wiki/Multigraph) capabilities.
 
   This edge adjacency index can be useful for graphs where many different kinds of edges exist between the same vertices and
   iteration over all edges is prohibitive.
+
+  ## Vertex identity
+
+  Identifiers are map keys and use exact term equality: `1` and `1.0` are distinct
+  identifiers. The function must return a stable identifier for each logical vertex.
+  Values with the same identifier refer to the same vertex; adding another value
+  with an existing identifier retains the first stored vertex and its labels.
+
+  The default hash can collide, causing distinct vertices to be treated as one and
+  their edges to share endpoints. For collision-free identity by vertex value, use
+  `Graph.new(vertex_identifier: fn vertex -> vertex end)`. For structured vertices,
+  a stable unique application ID can keep identifier keys small. Subgraphs retain
+  the original identifier function.
+
+  For undirected graphs, use consistent vertex values for each logical identifier
+  when adding and querying edges: endpoint ordering uses vertex values. DOT and
+  Mermaid serializers currently interpolate identifiers directly into node names;
+  tuple or map identifiers need a custom serializer or serialization-friendly IDs.
 
   ## Example
 
@@ -131,6 +153,11 @@ defmodule Graph do
       iex> g = Graph.new(multigraph: true, partition_by: fn edge -> [edge.weight] end) |> Graph.add_edges([{:a, :b, weight: 1}, {:b, :a, weight: 2}])
       ...> Graph.edges(g, by: 1)
       [%Graph.Edge{v1: :a, v2: :b, weight: 1}]
+
+      iex> g = Graph.new(vertex_identifier: fn vertex -> vertex end)
+      ...> g = Graph.add_vertices(g, [33_702, 44_741])
+      ...> Graph.num_vertices(g)
+      2
   """
   def new(opts \\ []) do
     type = Keyword.get(opts, :type) || :directed
@@ -229,8 +256,9 @@ defmodule Graph do
   @doc """
   Returns the number of edges in the graph.
 
-  Pseudo-edges (label/weight pairs applied to an edge) are not counted, only distinct
-  vertex pairs where an edge exists between them are counted.
+  Each differently labeled edge between a vertex pair is counted separately.
+  Repeated insertion with the same endpoints and label updates that edge rather
+  than increasing the count. Neighbor lists still contain each neighbor once.
 
   ## Example
 
@@ -423,7 +451,7 @@ defmodule Graph do
       ...> Graph.bellman_ford(g, :a)
       nil
   """
-  @spec bellman_ford(t, vertex) :: [vertex]
+  @spec bellman_ford(t, vertex) :: %{vertex => number | :infinity} | nil
   defdelegate bellman_ford(g, a), to: Graph.Pathfinding
 
   @doc """
@@ -444,7 +472,7 @@ defmodule Graph do
       ...> distances[:c]
       3
   """
-  @spec bellman_ford(t, vertex, keyword) :: [vertex]
+  @spec bellman_ford(t, vertex, keyword) :: %{vertex => number | :infinity} | nil
   def bellman_ford(g, a, opts) when is_list(opts),
     do: Graph.Pathfinding.bellman_ford(g, a, opts)
 
@@ -471,7 +499,7 @@ defmodule Graph do
       ...> Graph.a_star(g, :a, :d, fn _ -> 0 end)
       nil
   """
-  @spec a_star(t, vertex, vertex, (vertex, vertex -> integer)) :: [vertex]
+  @spec a_star(t, vertex, vertex, (vertex -> number)) :: [vertex] | nil
   defdelegate a_star(g, a, b, hfun), to: Graph.Pathfinding
 
   @doc """
@@ -492,7 +520,7 @@ defmodule Graph do
       ...> Graph.a_star(g, :a, :d, fn _ -> 0 end, by: :fast)
       [:a, :b, :d]
   """
-  @spec a_star(t, vertex, vertex, (vertex, vertex -> integer), keyword) :: [vertex]
+  @spec a_star(t, vertex, vertex, (vertex -> number), keyword) :: [vertex] | nil
   def a_star(g, a, b, hfun, opts) when is_list(opts),
     do: Graph.Pathfinding.a_star(g, a, b, hfun, opts)
 
@@ -502,6 +530,13 @@ defmodule Graph do
   The algorithm used here is a depth-first search, which evaluates the whole
   graph until all paths are found. Order is guaranteed to be deterministic,
   but not guaranteed to be in any meaningful order (i.e. shortest to longest).
+
+  Results are built eagerly. The number of paths can grow exponentially even in
+  a small layered acyclic graph; a disconnected target can also require extensive
+  exploration. Vertex count alone does not bound search time or result memory.
+  Taking a prefix with `Enum.take/2` afterwards does not limit the search.
+
+  Use `get_shortest_path/3` or `dijkstra/3` when one shortest path is sufficient.
 
   ## Example
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:b, :c}, {:c, :d}, {:b, :d}, {:c, :a}])
@@ -613,8 +648,9 @@ defmodule Graph do
     v_out = Map.get(oe, v_id) || MapSet.new()
     v_all = MapSet.union(v_in, v_out)
 
+    # Self-loops are emitted by the outgoing pass below.
     e_in =
-      Enum.flat_map(v_all, fn v2_id ->
+      Enum.flat_map(MapSet.delete(v_all, v_id), fn v2_id ->
         edge_key = {v2_id, v_id}
 
         case Map.get(meta, edge_key) do
@@ -664,12 +700,12 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b, label: :uses)
       ...> g = Graph.add_edge(g, :a, :b, label: :contains)
-      ...> Graph.edges(g, :a, :b) |> Enum.sort_by(& &1.label)
+      ...> Graph.edges(g, :a, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
 
       iex> g = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b, label: :uses)
       ...> g = Graph.add_edge(g, :a, :b, label: :contains)
-      ...> Graph.edges(g, :a, :b) |> Enum.sort_by(& &1.label)
+      ...> Graph.edges(g, :a, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :contains}, %Graph.Edge{v1: :a, v2: :b, label: :uses}]
 
       iex> g = Graph.new(multigraph: true) |> Graph.add_edges([{:a, :b}, {:b, :c}])
@@ -701,20 +737,24 @@ defmodule Graph do
     end
   end
 
-  def edges(%__MODULE__{type: type, edges: meta, vertex_identifier: vertex_identifier}, v1, v2) do
+  def edges(
+        %__MODULE__{type: type, edges: meta, vertex_identifier: vertex_identifier} = g,
+        v1,
+        v2
+      ) do
     with v1_id <- vertex_identifier.(v1),
          v2_id <- vertex_identifier.(v2),
          edge_key <- {v1_id, v2_id},
          edge_meta <- Map.get(meta, edge_key, %{}) do
       case type do
         :directed ->
-          edge_list(v1, v2, edge_meta, type)
+          edge_list(v1, v2, edge_meta, g)
 
         :undirected ->
           edge_meta2 = Map.get(meta, {v2_id, v1_id}, %{})
           merged_meta = Map.merge(edge_meta, edge_meta2)
 
-          edge_list(v1, v2, merged_meta, type)
+          edge_list(v1, v2, merged_meta, g)
       end
     end
   end
@@ -769,8 +809,8 @@ defmodule Graph do
     end)
     |> Enum.flat_map(fn {v1_id, v2_id} = edge_key ->
       if g.type == :undirected or direction == :both or
-           (direction == :in and v2_id == v_id) or
-           (direction == :out and v1_id == v_id) do
+           (direction == :in and v2_id === v_id) or
+           (direction == :out and v1_id === v_id) do
         g.edges
         |> Map.get(edge_key, %{})
         |> Enum.reduce([], fn {label, weight}, acc ->
@@ -815,20 +855,31 @@ defmodule Graph do
       else: Map.put(properties, edge_key, remaining)
   end
 
-  defp edge_list(v1, v2, edge_meta, :undirected) do
+  defp edge_list(v1, v2, edge_meta, %__MODULE__{} = g) do
+    {v1, v2} = if g.type == :undirected, do: ordered_vertices(g, v1, v2), else: {v1, v2}
+    key = {g.vertex_identifier.(v1), g.vertex_identifier.(v2)}
+
     for {label, weight} <- edge_meta do
-      if v1 > v2 do
-        Edge.new(v2, v1, label: label, weight: weight)
-      else
-        Edge.new(v1, v2, label: label, weight: weight)
-      end
+      props = get_edge_props(g.edge_properties, key, label)
+      Edge.new(v1, v2, label: label, weight: weight, properties: props)
     end
   end
 
-  defp edge_list(v1, v2, edge_meta, _) do
-    for {label, weight} <- edge_meta do
-      Edge.new(v1, v2, label: label, weight: weight)
-    end
+  defp ordered_vertices(_g, v1, v2) when v1 > v2, do: {v2, v1}
+  defp ordered_vertices(_g, v1, v2) when v1 < v2 or v1 === v2, do: {v1, v2}
+
+  defp ordered_vertices(%__MODULE__{edges: meta, vertex_identifier: identifier}, v1, v2) do
+    # Ordinary term order ties distinct numeric terms, even inside containers.
+    # Map keys use exact term order, so they also distinguish these vertices.
+    {v1, v2} = if %{v1 => nil} > %{v2 => nil}, do: {v2, v1}, else: {v1, v2}
+    id1 = identifier.(v1)
+    id2 = identifier.(v2)
+
+    # Keep single-orientation graphs built before exact ordering queryable.
+    # Prefer the exact order consistently if both orientations already exist.
+    if not Map.has_key?(meta, {id1, id2}) and Map.has_key?(meta, {id2, id1}),
+      do: {v2, v1},
+      else: {v1, v2}
   end
 
   @doc """
@@ -859,11 +910,8 @@ defmodule Graph do
   end
 
   def edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
-    if v1 > v2 do
-      do_edge(g, v2, v1, label)
-    else
-      do_edge(g, v1, v2, label)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_edge(g, v1, v2, label)
   end
 
   def edge(%__MODULE__{} = g, v1, v2, label) do
@@ -903,7 +951,7 @@ defmodule Graph do
       ...> Graph.vertices(g)
       [:a, :b]
   """
-  @spec vertices(t) :: vertex
+  @spec vertices(t) :: [vertex]
   def vertices(%__MODULE__{vertices: vs}) do
     Map.values(vs)
   end
@@ -975,8 +1023,8 @@ defmodule Graph do
       when is_list(labels) do
     id = vertex_identifier.(v)
 
-    case Map.get(vs, id) do
-      nil ->
+    case Map.fetch(vs, id) do
+      :error ->
         %__MODULE__{g | vertices: Map.put(vs, id, v), vertex_labels: Map.put(vl, id, labels)}
 
       _ ->
@@ -991,11 +1039,23 @@ defmodule Graph do
   @doc """
   Like `add_vertex/2`, but takes a list of vertices to add to the graph.
 
+  Each item is a vertex, including tuples and lists. To attach labels in bulk,
+  explicitly reduce `add_vertex/3` over your own `{vertex, labels}` records.
+  Repeated identifiers keep the first inserted vertex and labels, just as in
+  `add_vertex/3`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :a])
       ...> Graph.vertices(g)
       [:a, :b]
+
+      iex> labeled = [{:a, [:start]}, {:b, [:finish]}]
+      ...> g = Enum.reduce(labeled, Graph.new(), fn {vertex, labels}, graph ->
+      ...>   Graph.add_vertex(graph, vertex, labels)
+      ...> end)
+      ...> {Graph.vertex_labels(g, :a), Graph.vertex_labels(g, :b)}
+      {[:start], [:finish]}
   """
   @spec add_vertices(t, [vertex]) :: t
   def add_vertices(%__MODULE__{} = g, vs) when is_list(vs) do
@@ -1003,7 +1063,12 @@ defmodule Graph do
   end
 
   @doc """
-  Updates the labels for the given vertex.
+  Appends labels to the given vertex. To replace its complete label list, first
+  call `remove_vertex_labels/2` and then label the returned graph.
+
+  Graph values are immutable: references to earlier graphs keep their labels
+  alive. Binary labels can share backing storage with larger binaries; callers
+  can inspect `:binary.referenced_byte_size/1` when investigating retention.
 
   If no such vertex exists in the graph, `{:error, {:invalid_vertex, v}}` is returned.
 
@@ -1098,11 +1163,40 @@ defmodule Graph do
   """
   @spec replace_vertex(t, vertex, vertex) :: t | {:error, :no_such_vertex}
   def replace_vertex(
-        %__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertex_identifier: vertex_identifier} =
-          g,
+        %__MODULE__{vertices: vertices, vertex_identifier: identifier} = g,
         v,
         rv
       ) do
+    id = identifier.(v)
+    replacement_id = identifier.(rv)
+
+    cond do
+      not Map.has_key?(vertices, id) ->
+        {:error, :no_such_vertex}
+
+      Map.has_key?(vertices, replacement_id) ->
+        # Preserve the existing behavior when replacement coalesces two vertices.
+        replace_existing_vertex(g, v, rv)
+
+      true ->
+        incident =
+          Enum.map(edges(g, v), fn %Edge{} = edge ->
+            v1 = if identifier.(edge.v1) === id, do: rv, else: edge.v1
+            v2 = if identifier.(edge.v2) === id, do: rv, else: edge.v2
+            %Edge{edge | v1: v1, v2: v2}
+          end)
+
+        labels = vertex_labels(g, v)
+        g |> delete_vertex(v) |> add_vertex(rv, labels) |> add_edges(incident)
+    end
+  end
+
+  defp replace_existing_vertex(
+         %__MODULE__{out_edges: oe, in_edges: ie, edges: em, vertex_identifier: vertex_identifier} =
+           g,
+         v,
+         rv
+       ) do
     vs = g.vertices
     labels = g.vertex_labels
 
@@ -1110,47 +1204,44 @@ defmodule Graph do
          true <- Map.has_key?(vs, v_id),
          rv_id <- vertex_identifier.(rv),
          vs <- Map.put(Map.delete(vs, v_id), rv_id, rv) do
-      oe =
-        for {from_id, to} = e <- oe, into: %{} do
-          fid = if from_id == v_id, do: rv_id, else: from_id
+      # Keep each winning edge record and its properties together when keys coalesce.
+      {meta, properties} =
+        Enum.reduce(em, {%{}, %{}}, fn {{from, to} = key, value}, {meta, properties} ->
+          new_key =
+            {if(from === v_id, do: rv_id, else: from), if(to === v_id, do: rv_id, else: to)}
 
-          cond do
-            MapSet.member?(to, v_id) ->
-              {fid, MapSet.put(MapSet.delete(to, v_id), rv_id)}
+          new_key =
+            if g.type == :undirected do
+              {from, to} = new_key
 
-            from_id != fid ->
-              {fid, to}
+              {v1, v2} =
+                ordered_vertices(%{g | edges: %{}}, Map.fetch!(vs, from), Map.fetch!(vs, to))
 
-            :else ->
-              e
-          end
-        end
+              {vertex_identifier.(v1), vertex_identifier.(v2)}
+            else
+              new_key
+            end
 
-      ie =
-        for {to_id, from} = e <- ie, into: %{} do
-          tid = if to_id == v_id, do: rv_id, else: to_id
+          props = Map.get(g.edge_properties, key, %{})
 
-          cond do
-            MapSet.member?(from, v_id) ->
-              {tid, MapSet.put(MapSet.delete(from, v_id), rv_id)}
+          properties =
+            if map_size(props) == 0,
+              do: Map.delete(properties, new_key),
+              else: Map.put(properties, new_key, props)
 
-            to_id != tid ->
-              {tid, from}
-
-            :else ->
-              e
-          end
-        end
-
-      meta =
-        em
-        |> Stream.map(fn
-          {{^v_id, ^v_id}, meta} -> {{rv_id, rv_id}, meta}
-          {{^v_id, v2_id}, meta} -> {{rv_id, v2_id}, meta}
-          {{v1_id, ^v_id}, meta} -> {{v1_id, rv_id}, meta}
-          edge -> edge
+          {Map.put(meta, new_key, value), properties}
         end)
-        |> Enum.into(%{})
+
+      # Coalescing may combine two adjacency entries. Rebuild from the retained
+      # edge metadata so neither neighborhood is lost to duplicate map keys.
+      oe = Map.new(oe, fn {id, _} -> {if(id === v_id, do: rv_id, else: id), MapSet.new()} end)
+      ie = Map.new(ie, fn {id, _} -> {if(id === v_id, do: rv_id, else: id), MapSet.new()} end)
+
+      {oe, ie} =
+        Enum.reduce(meta, {oe, ie}, fn {{from, to}, _}, {oe, ie} ->
+          {Map.update(oe, from, MapSet.new([to]), &MapSet.put(&1, to)),
+           Map.update(ie, to, MapSet.new([from]), &MapSet.put(&1, from))}
+        end)
 
       labels =
         case Map.get(labels, v_id) do
@@ -1164,11 +1255,25 @@ defmodule Graph do
           out_edges: oe,
           in_edges: ie,
           edges: meta,
+          edge_properties: properties,
           vertex_labels: labels
       }
+      |> rebuild_edge_index()
     else
       _ -> {:error, :no_such_vertex}
     end
+  end
+
+  defp rebuild_edge_index(%__MODULE__{multigraph: false} = g), do: g
+
+  defp rebuild_edge_index(%__MODULE__{} = g) do
+    Enum.reduce(edges(g), %{g | edge_index: %{}}, fn edge, acc ->
+      index_multigraph_edge(
+        acc,
+        {g.vertex_identifier.(edge.v1), g.vertex_identifier.(edge.v2)},
+        edge
+      )
+    end)
   end
 
   @doc """
@@ -1197,24 +1302,28 @@ defmodule Graph do
          true <- Map.has_key?(vs, v_id) do
       g = %__MODULE__{} = prune_vertex_from_edge_index(g, v_id, v)
 
-      oe = Map.delete(g.out_edges, v_id)
-      ie = Map.delete(g.in_edges, v_id)
-      vs = Map.delete(vs, v_id)
-      ls = Map.delete(ls, v_id)
-      oe = for {id, ns} <- oe, do: {id, MapSet.delete(ns, v_id)}, into: %{}
-      ie = for {id, ns} <- ie, do: {id, MapSet.delete(ns, v_id)}, into: %{}
-      em = for {{id1, id2}, _} = e <- em, v_id != id1 && v_id != id2, do: e, into: %{}
+      {outs, oe} = Map.pop(g.out_edges, v_id, MapSet.new())
+      {ins, ie} = Map.pop(g.in_edges, v_id, MapSet.new())
 
-      ep =
-        for {{id1, id2}, _} = entry <- g.edge_properties,
-            v_id != id1 and v_id != id2,
-            into: %{},
-            do: entry
+      {ie, em} =
+        Enum.reduce(outs, {ie, em}, fn id, {ie, em} ->
+          ie = if id === v_id, do: ie, else: Map.update!(ie, id, &MapSet.delete(&1, v_id))
+          {ie, Map.delete(em, {v_id, id})}
+        end)
+
+      {oe, em} =
+        Enum.reduce(ins, {oe, em}, fn id, {oe, em} ->
+          oe = if id === v_id, do: oe, else: Map.update!(oe, id, &MapSet.delete(&1, v_id))
+          {oe, Map.delete(em, {id, v_id})}
+        end)
+
+      incident_keys = Enum.map(outs, &{v_id, &1}) ++ Enum.map(ins, &{&1, v_id})
+      ep = Map.drop(g.edge_properties, incident_keys)
 
       %__MODULE__{
         g
-        | vertices: vs,
-          vertex_labels: ls,
+        | vertices: Map.delete(vs, v_id),
+          vertex_labels: Map.delete(ls, v_id),
           out_edges: oe,
           in_edges: ie,
           edges: em,
@@ -1263,8 +1372,9 @@ defmodule Graph do
 
   @doc """
   Adds an edge connecting `v1` to `v2`. If either `v1` or `v2` do not exist in the graph,
-  they are automatically added. Adding the same edge more than once does not create multiple edges,
-  each edge is only ever stored once.
+  they are automatically added. Edges are identified by their endpoints and label:
+  different labels distinguish parallel edges, while adding the same endpoints and
+  label again updates the existing edge's weight.
 
   Edges have a default weight of 1, and an empty (nil) label. You can change this by passing options
   to this function, as shown below.
@@ -1280,17 +1390,19 @@ defmodule Graph do
       ...> [:a, :b] = Graph.vertices(g)
       ...> Graph.edges(g)
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
+
+      iex> g = Graph.new |> Graph.add_edge(:a, :b, label: :x) |> Graph.add_edge(:a, :b, label: :y)
+      ...> g = Graph.add_edge(g, :a, :b, label: :x, weight: 5)
+      ...> {Graph.num_edges(g), Graph.edge(g, :a, :b, :x).weight, Graph.neighbors(g, :a)}
+      {2, 5, [:b]}
   """
   @spec add_edge(t, vertex, vertex) :: t
   @spec add_edge(t, vertex, vertex, Edge.edge_opts()) :: t | no_return
   def add_edge(g, v1, v2, opts \\ [])
 
   def add_edge(%__MODULE__{type: :undirected} = g, v1, v2, opts) when is_list(opts) do
-    if v1 > v2 do
-      do_add_edge(g, v2, v1, opts)
-    else
-      do_add_edge(g, v1, v2, opts)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_add_edge(g, v1, v2, opts)
   end
 
   def add_edge(%__MODULE__{} = g, v1, v2, opts) when is_list(opts) do
@@ -1411,7 +1523,7 @@ defmodule Graph do
       [%Graph.Edge{v1: :a, v2: :b}, %Graph.Edge{v1: :b, v2: :c, weight: 2}]
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:a, :b, label: :foo, weight: 2}])
-      ...> Graph.edges(g) |> Enum.sort_by(& {&1.v1, &1.v2, &1.label})
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
 
       iex> Graph.new |> Graph.add_vertices([:a, :b, :c]) |> Graph.add_edges([:a, :b])
@@ -1455,11 +1567,8 @@ defmodule Graph do
   """
   @spec split_edge(t, vertex, vertex, vertex) :: t | {:error, :no_such_edge}
   def split_edge(%__MODULE__{type: :undirected} = g, v1, v2, v3) do
-    if v1 > v2 do
-      do_split_edge(g, v2, v1, v3)
-    else
-      do_split_edge(g, v1, v2, v3)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_split_edge(g, v1, v2, v3)
   end
 
   def split_edge(%__MODULE__{} = g, v1, v2, v3) do
@@ -1490,10 +1599,12 @@ defmodule Graph do
           edges: Map.delete(g.edges, {v1_id, v2_id})
       }
 
+      properties = g.edge_properties
+      g = %{g | edge_properties: Map.delete(properties, {v1_id, v2_id})}
       g = add_vertex(g, v3)
 
       Enum.reduce(meta, g, fn {label, weight}, acc ->
-        props = get_edge_props(g.edge_properties, {v1_id, v2_id}, label)
+        props = get_edge_props(properties, {v1_id, v2_id}, label)
 
         acc
         |> add_edge(v1, v3, label: label, weight: weight, properties: props)
@@ -1514,7 +1625,7 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
       ...> %Graph{} = g = Graph.update_edge(g, :a, :b, weight: 2, label: :foo)
-      ...> Graph.edges(g) |> Enum.sort_by(& &1.label)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :bar}, %Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}]
   """
   @spec update_edge(t, vertex, vertex, Edge.edge_opts()) :: t | {:error, :no_such_edge}
@@ -1531,23 +1642,20 @@ defmodule Graph do
 
       iex> g = Graph.new |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
       ...> %Graph{} = g = Graph.update_labelled_edge(g, :a, :b, :bar, weight: 2, label: :foo)
-      ...> Graph.edges(g) |> Enum.sort_by(& &1.label)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
 
       iex> g = Graph.new(type: :undirected) |> Graph.add_edge(:a, :b) |> Graph.add_edge(:a, :b, label: :bar)
       ...> %Graph{} = g = Graph.update_labelled_edge(g, :a, :b, :bar, weight: 2, label: :foo)
-      ...> Graph.edges(g) |> Enum.sort_by(& &1.label)
+      ...> Graph.edges(g) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo, weight: 2}, %Graph.Edge{v1: :a, v2: :b}]
   """
   @spec update_labelled_edge(t, vertex, vertex, label, Edge.edge_opts()) ::
           t | {:error, :no_such_edge}
   def update_labelled_edge(%__MODULE__{type: :undirected} = g, v1, v2, old_label, opts)
       when is_list(opts) do
-    if v1 > v2 do
-      do_update_labelled_edge(g, v2, v1, old_label, opts)
-    else
-      do_update_labelled_edge(g, v1, v2, old_label, opts)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_update_labelled_edge(g, v1, v2, old_label, opts)
   end
 
   def update_labelled_edge(%__MODULE__{} = g, v1, v2, old_label, opts) when is_list(opts) do
@@ -1661,11 +1769,8 @@ defmodule Graph do
   """
   @spec delete_edge(t, vertex, vertex) :: t
   def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2) do
-    if v1 > v2 do
-      do_delete_edge(g, v2, v1)
-    else
-      do_delete_edge(g, v1, v2)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_delete_edge(g, v1, v2)
   end
 
   def delete_edge(%__MODULE__{} = g, v1, v2) do
@@ -1789,7 +1894,7 @@ defmodule Graph do
       partition = delete_endpoint_edge(partition, v1_id, edge_key)
 
       partition =
-        if v1_id == v2_id,
+        if v1_id === v2_id,
           do: partition,
           else: delete_endpoint_edge(partition, v2_id, edge_key)
 
@@ -1868,11 +1973,8 @@ defmodule Graph do
   """
   @spec delete_edge(t, vertex, vertex, label) :: t
   def delete_edge(%__MODULE__{type: :undirected} = g, v1, v2, label) do
-    if v1 > v2 do
-      do_delete_edge(g, v2, v1, label)
-    else
-      do_delete_edge(g, v1, v2, label)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_delete_edge(g, v1, v2, label)
   end
 
   def delete_edge(%__MODULE__{} = g, v1, v2, label) do
@@ -1992,47 +2094,15 @@ defmodule Graph do
   """
   @spec delete_edges(t, vertex, vertex) :: t
   def delete_edges(%__MODULE__{type: :undirected} = g, v1, v2) do
-    if v1 > v2 do
-      do_delete_edges(g, v2, v1)
-    else
-      do_delete_edges(g, v1, v2)
-    end
+    {v1, v2} = ordered_vertices(g, v1, v2)
+    do_delete_edges(g, v1, v2)
   end
 
   def delete_edges(%__MODULE__{} = g, v1, v2) do
     do_delete_edges(g, v1, v2)
   end
 
-  defp do_delete_edges(
-         %__MODULE__{
-           in_edges: ie,
-           out_edges: oe,
-           edges: meta,
-           vertex_identifier: vertex_identifier
-         } = g,
-         v1,
-         v2
-       ) do
-    with v1_id <- vertex_identifier.(v1),
-         v2_id <- vertex_identifier.(v2),
-         edge_key <- {v1_id, v2_id},
-         true <- Map.has_key?(meta, edge_key),
-         v1_out <- Map.get(oe, v1_id),
-         v2_in <- Map.get(ie, v2_id) do
-      meta = Map.delete(meta, edge_key)
-      v1_out = MapSet.delete(v1_out, v2_id)
-      v2_in = MapSet.delete(v2_in, v1_id)
-
-      %__MODULE__{
-        g
-        | out_edges: Map.put(oe, v1_id, v1_out),
-          in_edges: Map.put(ie, v2_id, v2_in),
-          edges: meta
-      }
-    else
-      _ -> g
-    end
-  end
+  defp do_delete_edges(g, v1, v2), do: do_delete_edge(g, v1, v2)
 
   @doc """
   The transposition of a graph is another graph with the direction of all the edges reversed.
@@ -2081,6 +2151,11 @@ defmodule Graph do
 
   Multiple edges between two vertices are considered a single edge for purposes of this sort.
 
+  Returns `[]` for an empty directed graph and `false` for undirected input.
+  Self-loops do not prevent an ordering in this function; use `is_acyclic?/1`
+  when self-loops must also be rejected. Callers should handle the list and
+  `false` branches explicitly.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c, :d])
@@ -2105,6 +2180,10 @@ defmodule Graph do
 
   Multiple edges between two vertices are considered a single edge for purposes of this sort.
 
+  Returns a list of vertex lists, one per batch, or `false` for a cyclic or
+  undirected graph. Unlike `topsort/1`, this function rejects self-loops.
+  An empty directed graph returns `[]`.
+
   ## Example
 
       iex> g = Graph.new |> Graph.add_vertices([:a, :b, :c])
@@ -2127,7 +2206,7 @@ defmodule Graph do
       ...> Graph.batch_topsort(g)
       false
   """
-  @spec batch_topsort(t) :: [vertex] | false
+  @spec batch_topsort(t) :: [[vertex]] | false
   def batch_topsort(%__MODULE__{type: :undirected}), do: false
   def batch_topsort(%__MODULE__{} = g), do: Graph.Directed.batch_topsort(g)
 
@@ -2183,7 +2262,7 @@ defmodule Graph do
       ...> Graph.reachable(g, [:a])
       [:d, :c, :b, :a]
   """
-  @spec reachable(t, [vertex]) :: [[vertex]]
+  @spec reachable(t, [vertex]) :: [vertex]
   defdelegate reachable(g, vs), to: Graph.Directed
 
   @doc """
@@ -2199,7 +2278,7 @@ defmodule Graph do
       ...> Graph.reachable_neighbors(g, [:a])
       [:d, :c, :b]
   """
-  @spec reachable_neighbors(t, [vertex]) :: [[vertex]]
+  @spec reachable_neighbors(t, [vertex]) :: [vertex]
   defdelegate reachable_neighbors(g, vs), to: Graph.Directed
 
   @doc """
@@ -2215,7 +2294,7 @@ defmodule Graph do
       ...> Graph.reaching(g, [:d])
       [:b, :a, :c, :d]
   """
-  @spec reaching(t, [vertex]) :: [[vertex]]
+  @spec reaching(t, [vertex]) :: [vertex]
   defdelegate reaching(g, vs), to: Graph.Directed
 
   @doc """
@@ -2231,21 +2310,26 @@ defmodule Graph do
       ...> Graph.reaching_neighbors(g, [:b])
       [:b, :c, :a]
   """
-  @spec reaching_neighbors(t, [vertex]) :: [[vertex]]
+  @spec reaching_neighbors(t, [vertex]) :: [vertex]
   defdelegate reaching_neighbors(g, vs), to: Graph.Directed
 
   @doc """
   Returns all vertices of graph `g`. The order is given by a depth-first traversal of the graph,
   collecting visited vertices in preorder.
 
+  The traversal forms a depth-first forest, with arbitrary starting vertices and
+  neighbor order. For a directed graph, visiting a sink before its predecessors
+  can make preorder and postorder identical. Neither traversal promises insertion,
+  lexical, or dependency order; use `topsort/1` for a topological order of a DAG.
+
   ## Example
 
   Our example code constructs a graph which looks like so:
 
            :a
-             \
+             \\
               :b
-             /  \
+             /  \\
            :c   :d
            /
          :e
@@ -2264,14 +2348,18 @@ defmodule Graph do
   arbitrarily chosen vertex are collected in postorder, and all those collected vertices are placed before
   the subsequently visited vertices.
 
+  Starting vertices and neighbor order are arbitrary, so this may equal
+  `preorder/1`, particularly when directed sinks are visited as separate trees.
+  Use `topsort/1` when dependency order is required.
+
   ## Example
 
   Our example code constructs a graph which looks like so:
 
           :a
-            \
+            \\
              :b
-            /  \
+            /  \\
            :c   :d
           /
          :e
@@ -2527,7 +2615,7 @@ defmodule Graph do
               :ets.delete(degrees, v)
 
               for neighbor <- out_neighbors(g, v),
-                  not :ets.member(l, neighbor) and v != neighbor do
+                  not :ets.member(l, neighbor) and v !== neighbor do
                 :ets.update_counter(degrees, neighbor, {2, -1})
               end
 
@@ -2719,10 +2807,10 @@ defmodule Graph do
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
-      ...> Graph.in_edges(g, :b) |> Enum.sort_by(& &1.label)
+      ...> Graph.in_edges(g, :b) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
-  @spec in_edges(t, vertex) :: Edge.t()
+  @spec in_edges(t, vertex) :: [Edge.t()]
   def in_edges(%__MODULE__{type: :undirected} = g, v) do
     edges(g, v)
   end
@@ -2806,10 +2894,10 @@ defmodule Graph do
   ## Example
 
       iex> g = Graph.new |> Graph.add_edges([{:a, :b}, {:a, :b, label: :foo}, {:b, :c}])
-      ...> Graph.out_edges(g, :a) |> Enum.sort_by(& &1.label)
+      ...> Graph.out_edges(g, :a) |> Enum.sort_by(&{&1.v1, &1.v2, &1.label})
       [%Graph.Edge{v1: :a, v2: :b, label: :foo}, %Graph.Edge{v1: :a, v2: :b}]
   """
-  @spec out_edges(t, vertex) :: Edge.t()
+  @spec out_edges(t, vertex) :: [Edge.t()]
   def out_edges(%__MODULE__{type: :undirected} = g, v) do
     edges(g, v)
   end
@@ -2907,6 +2995,8 @@ defmodule Graph do
   @doc """
   Builds a maximal subgraph of `g` which includes all of the vertices in `vs` and the edges which connect them.
 
+  The subgraph retains the original graph's type and vertex identifier function.
+
   See the test suite for example usage.
   """
   @spec subgraph(t, [vertex]) :: t
@@ -2930,7 +3020,12 @@ defmodule Graph do
 
     Enum.reduce(
       allowed,
-      Graph.new(type: type, multigraph: multigraph, partition_by: partition_by),
+      Graph.new(
+        type: type,
+        multigraph: multigraph,
+        partition_by: partition_by,
+        vertex_identifier: vertex_identifier
+      ),
       fn v_id, sg ->
         v = Map.get(vertices, v_id)
 

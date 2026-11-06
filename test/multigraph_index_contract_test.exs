@@ -1,7 +1,6 @@
 defmodule Graph.IndexContractTest do
   use ExUnit.Case, async: true
 
-  alias Graph, as: Graph
   alias Graph.Edge
 
   defp partitions(edge) do
@@ -40,13 +39,13 @@ defmodule Graph.IndexContractTest do
       assert MapSet.new(Graph.edges(g, by: partition)) == MapSet.new(selected)
 
       for vertex <- vertices do
-        incident = Enum.filter(selected, &(&1.v1 == vertex or &1.v2 == vertex))
+        incident = Enum.filter(selected, &(&1.v1 === vertex or &1.v2 === vertex))
 
         incoming =
-          if g.type == :undirected, do: incident, else: Enum.filter(selected, &(&1.v2 == vertex))
+          if g.type == :undirected, do: incident, else: Enum.filter(selected, &(&1.v2 === vertex))
 
         outgoing =
-          if g.type == :undirected, do: incident, else: Enum.filter(selected, &(&1.v1 == vertex))
+          if g.type == :undirected, do: incident, else: Enum.filter(selected, &(&1.v1 === vertex))
 
         assert MapSet.new(Graph.edges(g, vertex, by: partition)) == MapSet.new(incident)
         assert MapSet.new(Graph.in_edges(g, vertex, by: partition)) == MapSet.new(incoming)
@@ -245,18 +244,95 @@ defmodule Graph.IndexContractTest do
     assert [%Edge{v1: %{value: :new}}] = Graph.in_edges(g, %{id: 2}, by: :flow)
   end
 
-  test "stale changed-identity replacement candidates do not introduce query crashes" do
-    # Upstream replace_vertex does not migrate its edge index for changed IDs.
-    # Preserve its incomplete-query behavior without dereferencing removed IDs.
-    g =
-      graph(:directed)
-      |> Graph.add_edge(:a, :b, label: :flow)
-      |> Graph.replace_vertex(:a, :replacement)
+  for type <- [:directed, :undirected] do
+    @replacement_type type
 
-    assert [%Edge{v1: :replacement, v2: :b}] = Graph.edges(g)
-    assert Graph.in_edges(g, :b, by: :flow) == []
-    assert Graph.out_edges(g, :a, by: :flow) == []
-    assert Graph.edges(g, :b, by: :flow) == []
+    test "#{type}: changed-identity replacement preserves properties and partition queries" do
+      g =
+        graph(@replacement_type)
+        |> Graph.add_edge(:a, :b, label: :flow, properties: %{kind: :definition})
+        |> Graph.add_edge(:a, :a, label: :loop, properties: %{kind: :self})
+        |> Graph.replace_vertex(:a, :replacement)
+        |> assert_index_contract()
+
+      assert Graph.edge(g, :replacement, :b, :flow).properties == %{kind: :definition}
+      assert Graph.out_edges(g, :a, by: :flow) == []
+      assert length(Graph.edges(g, :b, by: :flow)) == 1
+
+      refute Enum.any?(Map.keys(g.edge_properties), fn {a, b} ->
+               a === g.vertex_identifier.(:a) or b === g.vertex_identifier.(:a)
+             end)
+    end
+
+    test "#{type}: coalescing vertices keeps winning properties with their edge records" do
+      g =
+        graph(@replacement_type)
+        |> Graph.add_edge(:a, :c, label: :first, properties: %{kind: :first})
+        |> Graph.add_edge(:b, :c, label: :second, properties: %{kind: :second})
+        |> Graph.add_edge(:a, :d, label: :flow, properties: %{kind: :retained})
+        |> Graph.replace_vertex(:a, :b)
+        |> assert_index_contract()
+
+      for edge <- Graph.edges(g) do
+        expected = %{first: :first, second: :second, flow: :retained}
+        assert edge.properties == %{kind: Map.fetch!(expected, edge.label)}
+      end
+
+      g |> Graph.delete_vertex(:b) |> assert_index_contract()
+    end
+
+    test "#{type}: split and bulk deletion remove original properties and partitions" do
+      g =
+        graph(@replacement_type)
+        |> Graph.add_edge(:a, :b, label: :flow, properties: %{kind: :definition})
+        |> Graph.add_edge(:a, :b, label: :other, properties: %{kind: :runtime})
+        |> Graph.split_edge(:a, :b, :middle)
+        |> assert_index_contract()
+
+      refute Map.has_key?(g.edge_properties, {g.vertex_identifier.(:a), g.vertex_identifier.(:b)})
+      assert Graph.edge(g, :a, :middle, :flow).properties == %{kind: :definition}
+      assert Graph.edge(g, :middle, :b, :other).properties == %{kind: :runtime}
+      assert MapSet.new(Graph.edges(g, :a, :middle)) == MapSet.new(Graph.edges(g, :a))
+
+      g =
+        g
+        |> Graph.delete_edges(:a, :middle)
+        |> Graph.delete_edges(:middle, :b)
+        |> assert_index_contract()
+
+      assert g.edge_properties == %{}
+    end
+
+    test "#{type}: exact numeric identity survives indexed mutations and subgraphs" do
+      g =
+        Graph.new(
+          type: @replacement_type,
+          multigraph: true,
+          vertex_identifier: fn v -> v end,
+          partition_by: &partitions/1
+        )
+        |> Graph.add_edge(1, 1.0, label: :flow, properties: %{kind: :numeric})
+        |> Graph.add_edge(1.0, :other, label: :keep)
+
+      sg = Graph.subgraph(g, [1, 1.0]) |> assert_index_contract()
+      assert Graph.num_vertices(sg) == 2
+      assert Graph.edge(sg, 1, 1.0, :flow).properties == %{kind: :numeric}
+      g |> Graph.delete_edge(1, 1.0, :flow) |> assert_index_contract()
+      g |> Graph.delete_vertex(1) |> assert_index_contract()
+    end
+  end
+
+  test "coalescing an undirected vertex reorients indexed edges and their properties" do
+    g =
+      graph(:undirected)
+      |> Graph.add_edge(:a, :b, label: :flow, properties: %{kind: :definition})
+      |> Graph.add_vertex(:z)
+      |> Graph.replace_vertex(:a, :z)
+      |> assert_index_contract()
+
+    assert %Edge{v1: :b, v2: :z, properties: %{kind: :definition}} = Graph.edge(g, :z, :b, :flow)
+    assert Graph.edges(g, :b, :z) == Graph.edges(g, :z, :b)
+    g |> Graph.delete_edge(:z, :b, :flow) |> assert_index_contract()
   end
 
   defp drain_history_messages do

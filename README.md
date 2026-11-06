@@ -1,8 +1,7 @@
 # libgraph
 
-[![Master](https://travis-ci.org/bitwalker/libgraph.svg?branch=master)](https://travis-ci.org/bitwalker/libgraph)
+[![Main](https://github.com/bitwalker/libgraph/actions/workflows/elixir.yml/badge.svg?branch=main)](https://github.com/bitwalker/libgraph/actions/workflows/elixir.yml)
 [![Hex.pm Version](http://img.shields.io/hexpm/v/libgraph.svg?style=flat)](https://hex.pm/packages/libgraph)
-[![Coverage Status](https://coveralls.io/repos/github/bitwalker/libgraph/badge.svg?branch=master)](https://coveralls.io/github/bitwalker/libgraph?branch=master)
 
 [Documentation](https://hexdocs.pm/libgraph)
 
@@ -24,7 +23,7 @@ approach that feels good on that front.
 - A `Serializer` behaviour, for defining custom serialization of graphs, with a Graphviz DOT format serializer
   provided out of the box.
 
-It is backed by a large suite of tests, including several QuickCheck properties for the graph model. Its
+It is backed by a large suite of tests, including StreamData properties for the graph model. Its
 API shares some similarity with `:digraph`, but diverges in favor of a more idiomatic Elixir interface. In
 addition, over time I'm adding new functions to query the graph in ways not previously supported via `:digraph`,
 and introducing support for classifying a graph as undirected if so desired, so that queries over such graphs
@@ -45,11 +44,80 @@ def deps do
 end
 ```
 
+## Vertex identity
+
+By default, libgraph identifies vertices using a 32-bit hash. Hash collisions can
+silently treat distinct vertices as one, including their incident edges. To identify
+vertices by their exact values instead:
+
+```elixir
+graph = Graph.new(vertex_identifier: fn vertex -> vertex end)
+```
+
+For structured vertices, you can instead supply a stable unique application ID,
+such as `fn %{id: id} -> id end`. Identifiers are exact map keys: `1` and `1.0`
+remain distinct. Adding a value with an existing identifier keeps the first stored
+vertex and its labels. Subgraphs and extracted cores preserve the callback.
+
+Undirected edges order their endpoints by vertex value, so use consistent vertex
+values for each logical identifier when adding and querying edges. DOT and Mermaid
+serializers currently use identifiers directly as node names; tuple or map IDs
+require a custom serializer or serialization-friendly IDs.
+
+Compare build time, lookup time, retained vertex counts, and worker memory after GC for
+hashed and identity keys with `mix run bench/vertex_identity.exs`. The benchmark
+includes reused and reconstructed structured endpoints; workload-specific sharing
+can materially affect memory use. See `Graph.new/1` for the identifier contract.
+
+## Parallel edges
+
+Edge identity includes both endpoints and the label. Different labels distinguish
+parallel edges; adding the same endpoints and label again updates its weight:
+
+```elixir
+graph =
+  Graph.new()
+  |> Graph.add_edge(:a, :b, label: :reads)
+  |> Graph.add_edge(:a, :b, label: :writes)
+  |> Graph.add_edge(:a, :b, label: :reads, weight: 5)
+
+Graph.num_edges(graph) # 2
+Graph.neighbors(graph, :a) # [:b]
+```
+
+Edge enumeration and degrees count labeled edges; neighbor lists contain each
+neighbor once. Undirected endpoint reversal addresses the same labeled edge.
+There are no separate edge IDs for multiple edges with identical labels.
+
+DOT export preserves parallel edges by omitting `strict` when needed. Labels are
+display text, not arbitrary Graphviz attributes: a label containing a color value
+does not set edge color. Styling requires a custom serializer or editing the DOT.
+
+## Bulk vertex labels
+
+Reduce `Graph.add_vertex/3` over records that you explicitly interpret as vertex
+and labels:
+
+```elixir
+labeled = [{:a, [:start]}, {:b, [:finish]}]
+
+graph = Enum.reduce(labeled, Graph.new(), fn {vertex, labels}, graph ->
+  Graph.add_vertex(graph, vertex, labels)
+end)
+```
+
+Use the same reduction with a common label for every vertex if needed. Empty input
+keeps the initial graph; duplicate identifiers keep the first vertex and labels.
+`Graph.add_vertices/2` continues to treat every item as a vertex, so tuples and
+lists are never implicitly interpreted as labeling instructions.
+
 ## Multigraphs
 
 Libgraph supports multigraphs — graphs where multiple edges with different labels can exist between
 the same pair of vertices. When `multigraph: true` is enabled, an edge adjacency index is maintained
-that allows O(1) lookup of edges by partition key, avoiding full edge scans.
+that lets partition queries start from matching endpoint pairs, avoiding scans of unrelated
+edges. Query cost depends on the selected pairs and their parallel labels. The index uses
+additional memory and adds maintenance work to edge mutations.
 
 ### Creating a multigraph
 
@@ -121,7 +189,9 @@ Graph.Reducers.Bfs.map(g, & &1, by: :fast)
 
 ### Edge properties
 
-Edges now support an arbitrary `properties` map for storing additional metadata:
+Edges support an arbitrary `properties` map for storing additional metadata. The existing
+`%{label => weight}` edge records are retained; properties are stored separately in
+`edge_properties` only when populated:
 
 ```elixir
 g = Graph.new()
@@ -182,9 +252,63 @@ NOTE: While this library is primarily focused on the `Graph` data structure it d
 of a priority queue (you can find it under the `PriorityQueue` module), designed for use with graphs specifically, as it
 considers lower integer values higher priority, which is perfect for the kinds of graph algorithms you need a priority queue for.
 
+## Diagnosing path searches
+
+`Graph.get_paths/3` eagerly enumerates paths. A small layered graph can have an
+exponential number of paths, and an unreachable target can still require extensive
+exploration. Applying `Enum.take/2` to the returned list does not bound that work.
+Use `Graph.get_shortest_path/3` or `Graph.dijkstra/3` when one shortest path suffices.
+
+Run `mix run bench/all_paths.exs` to compare chains, branching trees, cycles,
+layered DAGs and disconnected targets. The fixed fixtures have a ten-second search
+deadline and report vertex/edge counts, maximum reachable depth, result count,
+time, reductions and process memory. Sampled memory peaks are lower bounds;
+process memory is not RSS or total off-heap binary storage.
+
+## Diagnosing label memory
+
+Keep only the latest graph when replacing labels unless historical snapshots are
+intentional. `Graph.label_vertex/3` appends labels; use `remove_vertex_labels/2`
+before labeling when replacing the complete list. Old graph values, queued
+messages, or references elsewhere in the application can retain earlier labels.
+
+Run `mix run bench/label_memory.exs` to compare direct and minimal GenServer label
+updates, owned binaries, sub-binaries, and deliberately retained graph history.
+It reports graph/label counts, mailbox size, process memory and referenced binary
+storage before and after diagnostic garbage collection. Checkpoint samples are
+not peak allocation or RSS, and process memory excludes off-heap binary storage.
+
+A small sub-binary can retain a much larger parent; compare `byte_size/1` with
+`:binary.referenced_byte_size/1`. Copy a value at the caller boundary with
+`:binary.copy/1` when measurements demonstrate unwanted parent retention. Forced
+GC is useful as a diagnostic control, not a general label-update policy. The
+isolated benchmark cannot rule out retention in application wrappers or callers.
+
 ## Contributing
 
-To run the test suite you will need to run `mix eqc.install --mini` once you've cloned the repo and fetched dependencies.
+The library supports Elixir 1.10 and later. CI checks the 1.10/OTP 23 floor in a digest-pinned container and representative Elixir/OTP pairs through the current release. Runtime versions and image digests are recorded in `.github/workflows/elixir.yml`.
+
+Use [mise](https://mise.jdx.dev/) to select a compatible local pair. For the canonical development checks:
+
+```sh
+mise exec erlang@27.3.4.19 elixir@1.18.4-otp-27 -- mix local.hex --force
+mise exec erlang@27.3.4.19 elixir@1.18.4-otp-27 -- mix deps.get --check-locked
+mise exec erlang@27.3.4.19 elixir@1.18.4-otp-27 -- mix test
+```
+
+Tests include StreamData properties; no proprietary QuickCheck installation is needed. Run `mix test --cover` for built-in coverage. On the canonical toolchain, also run `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix dialyzer`, `mix docs`, and `mix hex.build --unpack`. Generated packages are for local inspection; publishing remains a manual maintainer action.
+
+Workflow changes must pass actionlint, zizmor, and action-lock verification. Actions use full commit SHAs with version comments, and `.github/workflows/actions.lock` locks their provenance and transitive dependencies. After reviewing an action update, run:
+
+```sh
+gh extension install github/gh-actions-lock --pin v0.4.0
+gh actions-lock --no-narrow
+gh actions-lock --verify --no-narrow
+actionlint
+zizmor .github
+```
+
+Review the workflow and generated lockfile together; do not edit the lockfile by hand. Dependabot proposes weekly action updates after a seven-day cooldown. Runtime/tool downloads and Docker images are outside action locking; pin images by digest and verify directly downloaded legacy tooling. CI runs fork PRs with read-only permissions and no publication credentials.
 
 If you have changes in mind that are significant or potentially time consuming, please open a RFC-style PR first, where we
 can discuss your plans first. I don't want you to spend all your time crafting a PR that I ultimately reject because I don't

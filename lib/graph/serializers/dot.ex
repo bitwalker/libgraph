@@ -6,9 +6,13 @@ defmodule Graph.Serializers.DOT do
   use Graph.Serializer
   alias Graph.Serializer
 
-  def serialize(%Graph{type: type} = g) do
+  def serialize(%Graph{type: type, edges: edges} = g) do
     type = if type == :directed, do: "digraph", else: "graph"
-    result = "strict #{type} {\n" <> serialize_nodes(g) <> serialize_edges(g) <> "}\n"
+
+    qualifier =
+      if Enum.any?(edges, fn {_, labels} -> map_size(labels) > 1 end), do: "", else: "strict "
+
+    result = "#{qualifier}#{type} {\n" <> serialize_nodes(g) <> serialize_edges(g) <> "}\n"
     {:ok, result}
   end
 

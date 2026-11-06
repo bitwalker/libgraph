@@ -1,4 +1,4 @@
-defmodule Graph.GraphModelTest do
+defmodule Graph.MultigraphModelTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 

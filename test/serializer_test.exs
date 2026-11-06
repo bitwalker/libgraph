@@ -57,12 +57,7 @@ defmodule Graph.SerializerTests do
   defp kitchen_sink_graph do
     Graph.new()
     |> Graph.add_vertices([:a, :b, :c, :d])
-    |> Graph.add_edges([
-      {:a, :b, weight: 3},
-      {:b, :c, label: 5},
-      {:b, :d, label: 1.0},
-      {:c, :d}
-    ])
+    |> Graph.add_edges([{:a, :b, weight: 3}, {:b, :c, label: 5}, {:b, :d, label: 1.0}, {:c, :d}])
     |> Graph.label_vertex(:a, :start)
     |> Graph.label_vertex(:b, {:complex, :label})
     |> Graph.label_vertex(:d, "finish")

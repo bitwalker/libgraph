@@ -4,7 +4,7 @@ defmodule Graph.Mixfile do
   def project do
     [
       app: :libgraph,
-      version: "0.16.0",
+      version: "0.17.1",
       elixir: "~> 1.10",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -12,19 +12,19 @@ defmodule Graph.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       description: "A high-performance graph datastructure library for Elixir projects",
       package: package(),
-      test_coverage: [tool: ExCoveralls],
-      aliases: aliases(),
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.html": :test,
-        "coveralls.json": :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        docs: :docs,
+      aliases: aliases()
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        docs: :dev,
         bench: :bench,
         "bench.multigraph": :bench,
         "bench.multigraph_creation": :bench,
-        "bench.multigraph_memory": :bench
+        "bench.multigraph_memory": :bench,
+        "bench.partition_indexes": :bench
       ]
     ]
   end
@@ -52,13 +52,9 @@ defmodule Graph.Mixfile do
   defp deps do
     [
       {:benchee, "~> 1.0", only: [:bench]},
-      {:stream_data, "~> 0.5", only: [:test]},
-      {:excoveralls, "~> 0.7", only: [:test]},
+      {:stream_data, "~> 0.4", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: :dev},
-      {:ssl_verify_fun, "~> 1.1", manager: :rebar3, only: [:test], override: true},
-      {:tidewave, "~> 0.4", only: :dev},
-      {:bandit, "~> 1.0", only: :dev}
+      {:ex_doc, "~> 0.28", only: :dev, runtime: false}
     ]
   end
 
@@ -79,8 +75,7 @@ defmodule Graph.Mixfile do
       "bench.multigraph": ["run bench/multigraph.exs"],
       "bench.multigraph_creation": ["run bench/multigraph_creation.exs"],
       "bench.multigraph_memory": ["run bench/multigraph_memory.exs"],
-      tidewave:
-        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4000) end)'"
+      "bench.partition_indexes": ["run bench/partition_indexes.exs"]
     ]
   end
 
